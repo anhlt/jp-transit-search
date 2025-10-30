@@ -11,9 +11,7 @@ from ..core.models import Route
 console = Console()
 
 
-def format_route_table(
-    routes: Route | list[Route], verbose: bool = False
-) -> None:
+def format_route_table(routes: Route | list[Route], verbose: bool = False) -> None:
     """Display route(s) as a rich table."""
     if isinstance(routes, Route):
         routes = [routes]

@@ -15,7 +15,6 @@ from mcp.types import (
     TextContent,
     Tool,
 )
-from ..core.models import Route
 
 from ..core.exceptions import (
     NetworkError,
@@ -23,6 +22,7 @@ from ..core.exceptions import (
     ScrapingError,
     ValidationError,
 )
+from ..core.models import Route
 from ..core.scraper import YahooTransitScraper
 from ..crawler.station_crawler import StationSearcher
 
@@ -196,11 +196,10 @@ class TransitMCPServer:
 
             # Allow scraper to return either a single Route or a list of Route
             if isinstance(routes, Route):
-                route = routes
+                pass  # Will be normalized to list below
             elif isinstance(routes, (list, tuple)):
                 if not routes:
                     return [TextContent(type="text", text="No routes found")]
-                route = routes[0]
             else:
                 # Unknown return type from scraper
                 return [
@@ -226,7 +225,9 @@ class TransitMCPServer:
             result_text = f"**Found {len(routes_list)} routes from {from_station} to {to_station}:**\n\n"
 
             for idx, r in enumerate(routes_list, 1):
-                result_text += f"{idx}. **Route {idx}: {r.from_station} → {r.to_station}**\n"
+                result_text += (
+                    f"{idx}. **Route {idx}: {r.from_station} → {r.to_station}**\n"
+                )
                 result_text += f"   • Duration: {r.duration}\n"
                 result_text += f"   • Cost: {r.cost}\n"
                 result_text += f"   • Transfers: {r.transfer_count}\n"
@@ -235,7 +236,7 @@ class TransitMCPServer:
 
                 # Add per-route transfer details
                 if r.transfers:
-                    result_text += f"   Route Details:\n"
+                    result_text += "   Route Details:\n"
                     for t_i, transfer in enumerate(r.transfers, 1):
                         result_text += f"     {t_i}. {transfer.from_station} → {transfer.to_station}"
                         if transfer.line_name:
@@ -253,7 +254,6 @@ class TransitMCPServer:
                     text=f"JSON Data:\n```json\n{json.dumps(routes_data, indent=2, ensure_ascii=False)}\n```",
                 ),
             ]
-
 
         except (ValidationError, RouteNotFoundError, ScrapingError, NetworkError) as e:
             return [TextContent(type="text", text=f"Route search failed: {str(e)}")]

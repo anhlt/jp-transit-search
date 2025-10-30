@@ -314,13 +314,13 @@ class YahooTransitScraper:
             return transfers
 
         # Extract all stations with their times and details
-        stations = []
+        stations: list[dict[str, str | list[str]]] = []
         station_elements = route_detail.find_all("div", class_="station")
         for station in station_elements:
             # Get station name from dt element
-            station_name = station.find("dt")
-            if station_name:
-                station_name = station_name.get_text().strip()
+            station_name_element = station.find("dt")
+            if station_name_element:
+                station_name = station_name_element.get_text().strip()
             else:
                 station_name = station.get_text().strip()
 
@@ -419,42 +419,46 @@ class YahooTransitScraper:
             # Get departure time from current station
             if i < len(stations) and stations[i]["times"]:
                 dep_times = stations[i]["times"]
-                # For intermediate stations, use the second time if available (departure time)
-                if i > 0 and len(dep_times) > 1:
-                    departure_time = re.sub(r"[^\d:]", "", dep_times[1])
-                else:
-                    # For first station or single time, use first time
-                    for time_str in dep_times:
-                        if "発" in time_str:
-                            departure_time = re.sub(r"[^\d:]", "", time_str)
-                            break
-                    if not departure_time:
-                        departure_time = re.sub(r"[^\d:]", "", dep_times[0])
+                if isinstance(dep_times, list):
+                    # For intermediate stations, use the second time if available (departure time)
+                    if i > 0 and len(dep_times) > 1:
+                        departure_time = re.sub(r"[^\d:]", "", dep_times[1])
+                    else:
+                        # For first station or single time, use first time
+                        for time_str in dep_times:
+                            if "発" in time_str:
+                                departure_time = re.sub(r"[^\d:]", "", time_str)
+                                break
+                        if not departure_time and dep_times:
+                            departure_time = re.sub(r"[^\d:]", "", dep_times[0])
 
             # Get arrival time at next station
             if i + 1 < len(stations) and stations[i + 1]["times"]:
                 next_times = stations[i + 1]["times"]
-
-                # Arrival time is the first time or marked with 着
-                for time_str in next_times:
-                    if "着" in time_str:
-                        arrival_time = re.sub(r"[^\d:]", "", time_str)
-                        break
-                if not arrival_time and next_times:
-                    arrival_time = re.sub(r"[^\d:]", "", next_times[0])
+                if isinstance(next_times, list):
+                    # Arrival time is the first time or marked with 着
+                    for time_str in next_times:
+                        if "着" in time_str:
+                            arrival_time = re.sub(r"[^\d:]", "", time_str)
+                            break
+                    if not arrival_time and next_times:
+                        arrival_time = re.sub(r"[^\d:]", "", next_times[0])
 
             # Create transfer with detailed information
-            transfer = Transfer(
-                from_station=stations[i]["name"],
-                to_station=stations[i + 1]["name"],
-                line_name=line_name,
-                duration_minutes=int(duration_minutes),
-                cost_yen=cost_yen,
-                departure_time=departure_time,
-                arrival_time=arrival_time,
-                departure_platform=departure_platform,
-                arrival_platform=arrival_platform,
-            )
-            transfers.append(transfer)
+            from_station_name = stations[i]["name"]
+            to_station_name = stations[i + 1]["name"]
+            if isinstance(from_station_name, str) and isinstance(to_station_name, str):
+                transfer = Transfer(
+                    from_station=from_station_name,
+                    to_station=to_station_name,
+                    line_name=line_name,
+                    duration_minutes=int(duration_minutes),
+                    cost_yen=cost_yen,
+                    departure_time=departure_time,
+                    arrival_time=arrival_time,
+                    departure_platform=departure_platform,
+                    arrival_platform=arrival_platform,
+                )
+                transfers.append(transfer)
 
         return transfers

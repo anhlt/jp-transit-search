@@ -146,7 +146,7 @@ class TestFormatters:
         data = json.loads(output)
         assert isinstance(data, list)
         assert len(data) == 1
-        
+
         route = data[0]
         assert route["from_station"] == "横浜"
         assert route["to_station"] == "豊洲"
@@ -179,7 +179,7 @@ class TestFormatters:
         data = json.loads(output)
         assert isinstance(data, list)
         assert len(data) == 1
-        
+
         route = data[0]
         assert route["from_station"] == "東京"
         assert route["to_station"] == "新宿"

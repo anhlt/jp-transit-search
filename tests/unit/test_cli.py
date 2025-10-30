@@ -73,9 +73,9 @@ class TestCLI:
         assert "豊洲" in result.output
         assert "49分(乗車33分)" in result.output
         mock_scraper.search_route.assert_called_once_with(
-            from_station="横浜", 
-            to_station="豊洲", 
-            search_datetime=None, 
+            from_station="横浜",
+            to_station="豊洲",
+            search_datetime=None,
             search_type="earliest",
             save_html_path=None
         )
@@ -144,9 +144,9 @@ class TestCLI:
         assert result.exit_code == 0
         mock_scraper_class.assert_called_once_with(timeout=60)
         mock_scraper.search_route.assert_called_once_with(
-            from_station="横浜", 
-            to_station="豊洲", 
-            search_datetime=None, 
+            from_station="横浜",
+            to_station="豊洲",
+            search_datetime=None,
             search_type="earliest",
             save_html_path=None
         )
