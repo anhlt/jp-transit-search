@@ -28,10 +28,27 @@ jobs:
       run: |
         uv sync --dev
 
-    - name: Run linting
+    - name: Run linting and formatting
       run: |
         uv run ruff check src/ tests/
-        uv run ruff format --check src/ tests/
+        uv run ruff format src/ tests/
+
+    - name: Check for formatting changes
+      id: format-check
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "changes=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Commit formatting changes
+      if: steps.format-check.outputs.changes == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git commit -m "Auto-format code with Ruff"
 
     - name: Run type checking
       run: |
