@@ -145,6 +145,69 @@ asyncio.run(test())
 "
 ```
 
+## 🤖 Automated Station Data Updates
+
+### GitHub Action Integration
+
+This project includes a GitHub Action that automatically updates the station data when triggered by a comment. Simply comment `/update_station` on any issue or pull request to:
+
+1. **Crawl Latest Data**: Fetch the most recent station information from Yahoo Transit
+2. **Generate CSV**: Create an updated `stations.csv` file with comprehensive metadata
+3. **Auto-commit**: Automatically commit the updated file back to the repository
+4. **Real-time Feedback**: Get status updates through GitHub comments
+
+#### How to Use
+
+1. **On any Issue or PR**, comment:
+   ```
+   /update_station
+   ```
+
+2. **Monitor Progress**: The action will:
+   - Add a 👀 reaction to acknowledge the command
+   - Run the station crawler (may take 2-5 minutes)
+   - Commit the updated `stations.csv` to the repository
+   - Add a 🎉 reaction and detailed comment on success
+
+3. **Review Results**: The commit message will include:
+   - Number of stations crawled
+   - Timestamp of the update
+   - Who triggered the update
+   - Link to the issue/PR
+
+#### Example Workflow
+
+```markdown
+User Comment: "/update_station"
+↓
+GitHub Action Starts
+↓ 
+Crawls station data (1-5 minutes)
+↓
+Creates/updates stations.csv
+↓
+Commits with descriptive message
+↓
+Posts success comment with statistics
+```
+
+#### Benefits
+
+- **Always Fresh Data**: Keep your station database up-to-date
+- **Zero Manual Work**: Fully automated from trigger to commit
+- **Transparent Process**: Full logging and status updates
+- **Error Handling**: Graceful fallbacks if crawling fails
+- **Community Friendly**: Anyone can trigger updates via comments
+
+#### Workflow Details
+
+The GitHub Action (``.github/workflows/update-stations.yml``) includes:
+- **Smart Triggers**: Only runs on `/update_station` comments
+- **Dependency Management**: Uses uv for fast Python setup
+- **Error Recovery**: Falls back to sample data if Yahoo blocks requests
+- **Rich Feedback**: Detailed success/failure comments with statistics
+- **Git Integration**: Proper commit messages with metadata
+
 ## 📊 Creating and Managing CSV Station Data
 
 ### Method 1: Using the MCP Server Tools (Recommended)

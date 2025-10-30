@@ -1,7 +1,7 @@
 """Test configuration and fixtures."""
 
+
 import pytest
-from pathlib import Path
 
 
 @pytest.fixture
@@ -17,7 +17,7 @@ def sample_station_data():
 @pytest.fixture
 def sample_yahoo_response():
     """Sample Yahoo Transit HTML response."""
-    return '''
+    return """
     <div class="routeSummary">
         <li class="time">49分(乗車33分)</li>
         <li class="transfer">乗換：2回</li>
@@ -38,7 +38,7 @@ def sample_yahoo_response():
         <p class="fare">168円</p>
         <div class="station">豊洲</div>
     </div>
-    '''
+    """
 
 
 @pytest.fixture

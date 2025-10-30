@@ -8,3 +8,25 @@ wheels/
 
 # Virtual environments
 .venv
+venv
+
+# Test output files
+.coverage
+coverage.xml
+htmlcov/
+*_stations_*.csv
+*_stations_*.json
+sample_stations_*.csv
+complete_stations_export.*
+stations_data.csv
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Data directory for testing (but allow stations.csv)
+data/*
+!data/stations.csv
