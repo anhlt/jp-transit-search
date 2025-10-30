@@ -149,7 +149,7 @@ asyncio.run(test())
 
 ### GitHub Action Integration
 
-This project includes a GitHub Action that automatically updates the station data when triggered by a comment. Simply comment `/update station` on any issue or pull request to:
+This project includes a GitHub Action that automatically updates the station data when triggered by a comment. Simply comment `/update_station` on any issue or pull request to:
 
 1. **Crawl Latest Data**: Fetch the most recent station information from Yahoo Transit
 2. **Generate CSV**: Create an updated `stations.csv` file with comprehensive metadata
@@ -160,7 +160,7 @@ This project includes a GitHub Action that automatically updates the station dat
 
 1. **On any Issue or PR**, comment:
    ```
-   /update station
+   /update_station
    ```
 
 2. **Monitor Progress**: The action will:
@@ -178,7 +178,7 @@ This project includes a GitHub Action that automatically updates the station dat
 #### Example Workflow
 
 ```markdown
-User Comment: "/update station"
+User Comment: "/update_station"
 ↓
 GitHub Action Starts
 ↓ 
@@ -202,7 +202,7 @@ Posts success comment with statistics
 #### Workflow Details
 
 The GitHub Action (``.github/workflows/update-stations.yml``) includes:
-- **Smart Triggers**: Only runs on `/update station` comments
+- **Smart Triggers**: Only runs on `/update_station` comments
 - **Dependency Management**: Uses uv for fast Python setup
 - **Error Recovery**: Falls back to sample data if Yahoo blocks requests
 - **Rich Feedback**: Detailed success/failure comments with statistics

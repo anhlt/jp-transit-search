@@ -8,8 +8,8 @@ jobs:
   update-stations:
     if: |
       (github.event.issue.pull_request != null || github.event.issue.number != null) &&
-      (contains(github.event.comment.body, ' /update station') ||
-       startsWith(github.event.comment.body, '/update station'))
+      (contains(github.event.comment.body, ' /update_station') ||
+       startsWith(github.event.comment.body, '/update_station'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -98,7 +98,7 @@ jobs:
             The latest station data has been committed to the repository. You can download the updated `stations.csv` file from the repository root.
             
             ---
-            *Triggered by /update station command*
+            *Triggered by /update_station command*
       
       - name: Comment on no changes
         if: env.CHANGES_MADE == 'false'
@@ -111,7 +111,7 @@ jobs:
             The station crawling completed successfully, but no changes were detected in the data. The current `stations.csv` file is already up to date.
             
             ---
-            *Triggered by /update station command*
+            *Triggered by /update_station command*
       
       - name: Add success reaction
         if: success()
@@ -136,7 +136,7 @@ jobs:
             - Parsing errors due to website changes
             
             ---
-            *Triggered by /update station command*
+            *Triggered by /update_station command*
       
       - name: Add failure reaction
         if: failure()
