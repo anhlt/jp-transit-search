@@ -1,6 +1,7 @@
 """CLI main entry point for Japanese transit search."""
 
 import sys
+from datetime import datetime as dt_module
 
 import click
 from rich.console import Console
@@ -38,8 +39,34 @@ def cli() -> None:
 )
 @click.option("--timeout", "-t", default=30, help="Request timeout in seconds")
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed information")
+@click.option(
+    "--datetime",
+    "-d",
+    "datetime_str",
+    help="Departure datetime (YYYY-MM-DD HH:MM format)",
+    type=str,
+)
+@click.option(
+    "--search-type",
+    "-s",
+    type=click.Choice(["earliest", "cheapest", "easiest"]),
+    default="earliest",
+    help="Search type preference",
+)
+@click.option(
+    "--save-html",
+    help="Save raw HTML response to file for debugging",
+    type=click.Path(),
+)
 def search(
-    from_station: str, to_station: str, output_format: str, timeout: int, verbose: bool
+    from_station: str,
+    to_station: str,
+    output_format: str,
+    timeout: int,
+    verbose: bool,
+    datetime_str: str,
+    search_type: str,
+    save_html: str,
 ) -> None:
     """Search for transit routes between stations.
 
@@ -47,21 +74,43 @@ def search(
         jp-transit search "横浜" "豊洲"
         jp-transit search "東京" "新宿" --format json
         jp-transit search "渋谷" "品川" --verbose
+        jp-transit search "大船" "羽田空港" --datetime "2025-10-31 16:31"
     """
     try:
+        # Parse datetime if provided
+        search_datetime = None
+        if datetime_str:
+            try:
+                search_datetime = dt_module.strptime(datetime_str, "%Y-%m-%d %H:%M")
+            except ValueError:
+                error_console.print(
+                    "[red]Invalid datetime format. Use YYYY-MM-DD HH:MM[/red]"
+                )
+                sys.exit(1)
+
         with console.status(
             f"[bold green]Searching route from {from_station} to {to_station}..."
         ):
             scraper = YahooTransitScraper(timeout=timeout)
-            route = scraper.search_route(from_station, to_station)
+            routes = scraper.search_route(
+                from_station=from_station,
+                to_station=to_station,
+                search_datetime=search_datetime,
+                search_type=search_type,
+                save_html_path=save_html,
+            )
 
         # Format and display results
+        if len(routes) == 0:
+            error_console.print("[yellow]No routes found[/yellow]")
+            return
+
         if output_format == "json":
-            click.echo(format_route_json(route))
+            click.echo(format_route_json(routes))
         elif output_format == "detailed":
-            click.echo(format_route_detailed(route))
+            format_route_detailed(routes)
         else:
-            click.echo(format_route_table(route, verbose=verbose))
+            format_route_table(routes, verbose=verbose)
 
     except ValidationError as e:
         error_console.print(f"[red]Error:[/red] {e}")

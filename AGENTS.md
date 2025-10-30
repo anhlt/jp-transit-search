@@ -1,11 +1,24 @@
 # Agent Development Guide
 
 ## Commands
-- **Tests**: `pytest` (all), `pytest tests/unit/test_models.py::test_station_creation` (single test)
-- **Lint**: `ruff check src/` (linting), `ruff format src/` (formatting) 
-- **Type check**: `mypy src/jp_transit_search/`
-- **Coverage**: `pytest --cov=jp_transit_search --cov-report=html`
-- **Install deps**: `uv sync` (development), `uv sync --no-dev` (production only)
+- **Tests**: `uv run pytest` (all), `uv run pytest tests/unit/test_models.py::test_station_creation` (single test)
+- **Lint**: `uv run ruff check src/ tests/` (linting), `uv run ruff format src/ tests/` (formatting) 
+- **Type check**: `uv run mypy src/jp_transit_search/`
+- **Coverage**: `uv run pytest --cov=jp_transit_search --cov-report=html`
+- **Install deps**: `uv sync` (development), `uv run sync --no-dev` (production only)
+
+## Pre-commit/PR Checklist
+Before creating commits or pull requests, ensure all checks pass:
+```bash
+# Run all linting and type checks
+uv run ruff check src/ tests/
+uv run mypy src/jp_transit_search/
+uv run pytest
+
+# Fix any issues found
+uv run ruff format src/ tests/  # Auto-fix formatting
+uv run ruff check src/ tests/ --fix  # Auto-fix some lint issues
+```
 
 ## Code Style
 - **Formatting**: Black (88 char line length), Ruff for imports/linting

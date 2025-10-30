@@ -85,7 +85,7 @@ class TestTransitMCPServer:
     @pytest.mark.asyncio
     async def test_search_route_success(self, server, sample_route):
         """Test successful route search."""
-        with patch.object(server.scraper, "search_route", return_value=sample_route):
+        with patch.object(server.scraper, "search_route", return_value=[sample_route]):
             result = await server._search_route(
                 {"from_station": "Tokyo", "to_station": "Osaka"}
             )
