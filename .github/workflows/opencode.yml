@@ -12,8 +12,6 @@ jobs:
       contains(github.event.comment.body, ' /opencode') ||
       startsWith(github.event.comment.body, '/opencode')
     runs-on: ubuntu-latest
-    # Temporarily disabled due to GitHub Models access issues
-    if: false
     permissions:
       id-token: write
       contents: read
@@ -23,9 +21,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Retrieve secrets from Bitwarden Secrets Manager
+        uses: bitwarden/sm-action@v1.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          secrets: |
+            ${{ secrets.OPENROUTER_SECRET_ID }} > OPENROUTER_API_KEY
+
       - name: Run opencode
         uses: sst/opencode/github@latest
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENROUTER_API_KEY: ${{ env.OPENROUTER_API_KEY }}
         with:
-          model: gpt-4o
+          model: openrouter/moonshotai/kimi-k2
