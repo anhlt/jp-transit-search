@@ -25,3 +25,6 @@ stations_data.csv
 *.swp
 *.swo
 *~
+-e 
+# Data directory for testing
+data/
