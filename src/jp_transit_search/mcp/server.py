@@ -136,7 +136,7 @@ class TransitMCPServer:
                 ),
                 Tool(
                     name="crawl_stations",
-                    description="Crawl and update station database from web sources",
+                    description="Crawl and update station database from web sources (automatically saves to data/stations.csv)",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -178,20 +178,7 @@ class TransitMCPServer:
                         }
                     }
                 ),
-                Tool(
-                    name="save_stations_csv",
-                    description="Save current station database to CSV file",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "filename": {
-                                "type": "string",
-                                "description": "CSV filename (optional, defaults to 'data/stations.csv')",
-                                "default": "data/stations.csv"
-                            }
-                        }
-                    }
-                ),
+
                 Tool(
                     name="load_stations_csv",
                     description="Load station database from CSV file",
@@ -223,8 +210,7 @@ class TransitMCPServer:
                     return await self._crawl_stations(arguments)
                 elif name == "list_station_database":
                     return await self._list_station_database(arguments)
-                elif name == "save_stations_csv":
-                    return await self._save_stations_csv(arguments)
+
                 elif name == "load_stations_csv":
                     return await self._load_stations_csv(arguments)
                 else:
@@ -487,42 +473,7 @@ class TransitMCPServer:
         except Exception as e:
             return [TextContent(type="text", text=f"Failed to list stations: {str(e)}")]
     
-    async def _save_stations_csv(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Save current station database to CSV file."""
-        filename = arguments.get("filename", "data/stations.csv")
-        
-        try:
-            from pathlib import Path
-            csv_file = Path(filename)
-            
-            # Get current stations from searcher
-            stations = self.station_searcher.stations
-            
-            if not stations:
-                return [TextContent(type="text", text="No stations in database to save")]
-            
-            # Save to CSV
-            self.station_crawler.save_to_csv(stations, csv_file)
-            
-            result_text = f"**Station database saved to CSV!**\n\n"
-            result_text += f"• **File:** {csv_file.absolute()}\n"
-            result_text += f"• **Stations saved:** {len(stations)}\n"
-            
-            # Summary by prefecture
-            prefecture_counts = {}
-            for station in stations:
-                if station.prefecture:
-                    prefecture_counts[station.prefecture] = prefecture_counts.get(station.prefecture, 0) + 1
-            
-            if prefecture_counts:
-                result_text += f"\n**By Prefecture:**\n"
-                for prefecture, count in sorted(prefecture_counts.items()):
-                    result_text += f"• {prefecture}: {count} stations\n"
-            
-            return [TextContent(type="text", text=result_text)]
-            
-        except Exception as e:
-            return [TextContent(type="text", text=f"Failed to save stations to CSV: {str(e)}")]
+
     
     async def _load_stations_csv(self, arguments: Dict[str, Any]) -> List[TextContent]:
         """Load station database from CSV file."""
