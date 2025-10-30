@@ -63,7 +63,7 @@ class TestCLI:
         """Test successful search with table format."""
         # Setup mock
         mock_scraper = Mock()
-        mock_scraper.search_route.return_value = self.sample_route
+        mock_scraper.search_route.return_value = [self.sample_route]
         mock_scraper_class.return_value = mock_scraper
 
         result = self.runner.invoke(cli, ["search", "横浜", "豊洲"])
@@ -72,14 +72,19 @@ class TestCLI:
         assert "横浜" in result.output
         assert "豊洲" in result.output
         assert "49分(乗車33分)" in result.output
-        mock_scraper.search_route.assert_called_once_with("横浜", "豊洲")
+        mock_scraper.search_route.assert_called_once_with(
+            from_station="横浜", 
+            to_station="豊洲", 
+            search_datetime=None, 
+            search_type="earliest"
+        )
 
     @patch("jp_transit_search.cli.main.YahooTransitScraper")
     def test_search_command_success_json_format(self, mock_scraper_class):
         """Test successful search with JSON format."""
         # Setup mock
         mock_scraper = Mock()
-        mock_scraper.search_route.return_value = self.sample_route
+        mock_scraper.search_route.return_value = [self.sample_route]
         mock_scraper_class.return_value = mock_scraper
 
         result = self.runner.invoke(cli, ["search", "横浜", "豊洲", "--format", "json"])
@@ -87,17 +92,20 @@ class TestCLI:
         assert result.exit_code == 0
         # Parse JSON to verify it's valid
         output_data = json.loads(result.output)
-        assert output_data["from_station"] == "横浜"
-        assert output_data["to_station"] == "豊洲"
-        assert output_data["transfer_count"] == 2
-        assert len(output_data["transfers"]) == 2
+        assert isinstance(output_data, list)
+        assert len(output_data) == 1
+        route = output_data[0]
+        assert route["from_station"] == "横浜"
+        assert route["to_station"] == "豊洲"
+        assert route["transfer_count"] == 2
+        assert len(route["transfers"]) == 2
 
     @patch("jp_transit_search.cli.main.YahooTransitScraper")
     def test_search_command_success_detailed_format(self, mock_scraper_class):
         """Test successful search with detailed format."""
         # Setup mock
         mock_scraper = Mock()
-        mock_scraper.search_route.return_value = self.sample_route
+        mock_scraper.search_route.return_value = [self.sample_route]
         mock_scraper_class.return_value = mock_scraper
 
         result = self.runner.invoke(
@@ -114,7 +122,7 @@ class TestCLI:
         """Test search command with verbose flag."""
         # Setup mock
         mock_scraper = Mock()
-        mock_scraper.search_route.return_value = self.sample_route
+        mock_scraper.search_route.return_value = [self.sample_route]
         mock_scraper_class.return_value = mock_scraper
 
         result = self.runner.invoke(cli, ["search", "横浜", "豊洲", "--verbose"])
@@ -127,13 +135,25 @@ class TestCLI:
         """Test search command with custom timeout."""
         # Setup mock
         mock_scraper = Mock()
-        mock_scraper.search_route.return_value = self.sample_route
+        mock_scraper.search_route.return_value = [self.sample_route]
         mock_scraper_class.return_value = mock_scraper
 
         result = self.runner.invoke(cli, ["search", "横浜", "豊洲", "--timeout", "60"])
 
         assert result.exit_code == 0
         mock_scraper_class.assert_called_once_with(timeout=60)
+        mock_scraper.search_route.assert_called_once_with(
+            from_station="横浜", 
+            to_station="豊洲", 
+            search_datetime=None, 
+            search_type="earliest"
+        )
+        mock_scraper.search_route.assert_called_once_with(
+            from_station="横浜", 
+            to_station="豊洲", 
+            search_datetime=None, 
+            search_type="earliest"
+        )
 
     @patch("jp_transit_search.cli.main.YahooTransitScraper")
     def test_search_command_validation_error(self, mock_scraper_class):

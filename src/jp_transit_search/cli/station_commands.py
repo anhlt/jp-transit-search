@@ -289,7 +289,9 @@ def search_stations(
     default="table",
     help="Output format",
 )
-def list_stations(prefecture: str | None, limit: int, data: str, output_format: str) -> None:
+def list_stations(
+    prefecture: str | None, limit: int, data: str, output_format: str
+) -> None:
     """List stations.
 
     Examples:
@@ -375,7 +377,9 @@ def list_stations(prefecture: str | None, limit: int, data: str, output_format: 
                         "aliases": "|".join(station.aliases) if station.aliases else "",
                         "line_type": station.line_type or "",
                         "company_code": station.company_code or "",
-                        "all_lines": "|".join(station.all_lines) if station.all_lines else "",
+                        "all_lines": "|".join(station.all_lines)
+                        if station.all_lines
+                        else "",
                     }
                 )
 

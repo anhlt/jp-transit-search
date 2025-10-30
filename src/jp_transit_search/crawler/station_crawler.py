@@ -21,22 +21,60 @@ logger = logging.getLogger(__name__)
 
 # JIS X 0401 prefecture codes mapping
 PREFECTURE_ID_MAPPING = {
-    "北海道": "01", "青森県": "02", "岩手県": "03", "宮城県": "04", "秋田県": "05",
-    "山形県": "06", "福島県": "07", "茨城県": "08", "栃木県": "09", "群馬県": "10",
-    "埼玉県": "11", "千葉県": "12", "東京都": "13", "神奈川県": "14", "新潟県": "15",
-    "富山県": "16", "石川県": "17", "福井県": "18", "山梨県": "19", "長野県": "20",
-    "岐阜県": "21", "静岡県": "22", "愛知県": "23", "三重県": "24", "滋賀県": "25",
-    "京都府": "26", "大阪府": "27", "兵庫県": "28", "奈良県": "29", "和歌山県": "30",
-    "鳥取県": "31", "島根県": "32", "岡山県": "33", "広島県": "34", "山口県": "35",
-    "徳島県": "36", "香川県": "37", "愛媛県": "38", "高知県": "39", "福岡県": "40",
-    "佐賀県": "41", "長崎県": "42", "熊本県": "43", "大分県": "44", "宮崎県": "45",
-    "鹿児島県": "46", "沖縄県": "47"
+    "北海道": "01",
+    "青森県": "02",
+    "岩手県": "03",
+    "宮城県": "04",
+    "秋田県": "05",
+    "山形県": "06",
+    "福島県": "07",
+    "茨城県": "08",
+    "栃木県": "09",
+    "群馬県": "10",
+    "埼玉県": "11",
+    "千葉県": "12",
+    "東京都": "13",
+    "神奈川県": "14",
+    "新潟県": "15",
+    "富山県": "16",
+    "石川県": "17",
+    "福井県": "18",
+    "山梨県": "19",
+    "長野県": "20",
+    "岐阜県": "21",
+    "静岡県": "22",
+    "愛知県": "23",
+    "三重県": "24",
+    "滋賀県": "25",
+    "京都府": "26",
+    "大阪府": "27",
+    "兵庫県": "28",
+    "奈良県": "29",
+    "和歌山県": "30",
+    "鳥取県": "31",
+    "島根県": "32",
+    "岡山県": "33",
+    "広島県": "34",
+    "山口県": "35",
+    "徳島県": "36",
+    "香川県": "37",
+    "愛媛県": "38",
+    "高知県": "39",
+    "福岡県": "40",
+    "佐賀県": "41",
+    "長崎県": "42",
+    "熊本県": "43",
+    "大分県": "44",
+    "宮崎県": "45",
+    "鹿児島県": "46",
+    "沖縄県": "47",
 }
 
 
 @dataclass
 class CrawlState:
     """State for resumable crawling."""
+
     completed_prefectures: list[str] = field(default_factory=list)
     completed_lines: dict[str, list[str]] = field(default_factory=dict)
     current_prefecture_index: int | None = None
@@ -53,6 +91,7 @@ class CrawlState:
 @dataclass
 class StationDetails:
     """Details for a station."""
+
     # city field removed - not available from Yahoo Transit data source
     # latitude, longitude, line_name_kana, line_color, station_code removed - no data available
     prefecture_id: str | None = None
@@ -115,7 +154,11 @@ class CrawlingProgress:
 class StationCrawler:
     """Crawler for Japanese train station data."""
 
-    def __init__(self, timeout: int = 30, progress_callback: Callable[[dict[str, Any]], None] | None = None):
+    def __init__(
+        self,
+        timeout: int = 30,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    ):
         """Initialize the station crawler.
 
         Args:
@@ -438,9 +481,7 @@ class StationCrawler:
                 increment_stations=len(new_stations),
             )
 
-    def _crawl_yahoo_transit_stations_resumable(
-        self, crawl_state: CrawlState
-    ) -> None:
+    def _crawl_yahoo_transit_stations_resumable(self, crawl_state: CrawlState) -> None:
         """Crawl station data from Yahoo Transit with resume capability."""
         logger.info("Crawling Yahoo Transit station data (resumable)")
 
@@ -527,9 +568,7 @@ class StationCrawler:
 
             # Get completed lines for this prefecture
             pref_key = f"{pref_code}_{pref_name}"
-            completed_lines = set(
-                crawl_state.completed_lines.get(pref_key, [])
-            )
+            completed_lines = set(crawl_state.completed_lines.get(pref_key, []))
 
             stations_batch = []
 
@@ -826,7 +865,12 @@ class StationCrawler:
                     text = elem.get_text().strip()
 
                     # Look for line links or line names (including 市電, 電車, etc.)
-                    if ("線" in text or "Line" in text or "市電" in text or "電車" in text) and len(text) < 30:
+                    if (
+                        "線" in text
+                        or "Line" in text
+                        or "市電" in text
+                        or "電車" in text
+                    ) and len(text) < 30:
                         # Filter out common non-line texts
                         exclude_terms = ["路線図", "路線情報", "線路", "新幹線情報"]
                         if (
@@ -839,6 +883,7 @@ class StationCrawler:
 
                 # Extract station ID from URL
                 import re
+
                 station_id_match = re.search(r"/station/(\d+)", station_url)
                 if station_id_match:
                     details.station_id = station_id_match.group(1)
@@ -853,6 +898,7 @@ class StationCrawler:
                 for script in script_tags:
                     try:
                         import json
+
                         json_data = json.loads(script.string or "")
                         # Look for Next.js data structure
                         if "props" in json_data and "pageProps" in json_data["props"]:
@@ -886,17 +932,20 @@ class StationCrawler:
                 # Also try to extract from URL parameters which contain company and line info
                 if "?" in station_url:
                     from urllib.parse import parse_qs, urlparse
+
                     parsed_url = urlparse(station_url)
                     params = parse_qs(parsed_url.query)
 
                     if "company" in params:
                         # URL decode the company name
                         from urllib.parse import unquote
+
                         details.company_name = unquote(params["company"][0])
 
                     if "line" in params:
                         # URL decode the line name
                         from urllib.parse import unquote
+
                         details.line_name = unquote(params["line"][0])
 
                 # City extraction removed - Yahoo Transit pages don't contain reliable city/ward data
