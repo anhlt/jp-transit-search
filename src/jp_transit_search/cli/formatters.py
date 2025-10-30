@@ -11,7 +11,7 @@ from ..core.models import Route
 console = Console()
 
 
-def format_route_table(route: Route, verbose=False) -> str:
+def format_route_table(route: Route, verbose: bool = False) -> str:
     """Format route as a rich table."""
     # Create main route info table
     table = Table(
@@ -125,7 +125,7 @@ def format_route_json(route: Route) -> str:
     return json.dumps(route_dict, ensure_ascii=False, indent=2)
 
 
-def format_station_table(stations, verbose=False) -> str:
+def format_station_table(stations: list[object], verbose: bool = False) -> str:
     """Format stations as a table."""
     table = Table(title="Stations", show_header=True, header_style="bold magenta")
     table.add_column("Name", style="cyan", no_wrap=True)

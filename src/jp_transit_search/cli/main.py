@@ -20,7 +20,7 @@ error_console = Console(stderr=True)
 
 @click.group()
 @click.version_option(version="0.1.0")
-def cli():
+def cli() -> None:
     """Japanese Transit Search - Search transit routes between Japanese stations."""
     pass
 
@@ -40,7 +40,7 @@ def cli():
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed information")
 def search(
     from_station: str, to_station: str, output_format: str, timeout: int, verbose: bool
-):
+) -> None:
     """Search for transit routes between stations.
 
     Examples:
@@ -84,13 +84,13 @@ cli.add_command(stations)
 
 
 @cli.group()
-def config():
+def config() -> None:
     """Configuration management."""
     pass
 
 
 @config.command("show")
-def show_config():
+def show_config() -> None:
     """Show current configuration."""
     console.print("[bold]Current Configuration:[/bold]")
     console.print("• Default timeout: 30 seconds")
@@ -101,7 +101,7 @@ def show_config():
 @config.command("set")
 @click.argument("key")
 @click.argument("value")
-def set_config(key: str, value: str):
+def set_config(key: str, value: str) -> None:
     """Set configuration value.
 
     Examples:

@@ -3,7 +3,7 @@
 import re
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from .exceptions import NetworkError, RouteNotFoundError, ScrapingError, ValidationError
@@ -49,7 +49,12 @@ class YahooTransitScraper:
         if not to_station or not to_station.strip():
             raise ValidationError("Destination station name cannot be empty")
 
-        request = RouteSearchRequest(from_station=from_station, to_station=to_station)
+        request = RouteSearchRequest(
+            from_station=from_station,
+            to_station=to_station,
+            search_datetime=None,
+            search_type="earliest"
+        )
         html_content = self._fetch_route_page(request)
         return self._parse_route_page(html_content, request)
 
@@ -57,7 +62,8 @@ class YahooTransitScraper:
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=4, max=10),
         retry_error_callback=lambda retry_state: retry_state.outcome.result()
-        if hasattr(retry_state.outcome, "exception")
+        if retry_state.outcome is not None
+        and hasattr(retry_state.outcome, "exception")
         and isinstance(retry_state.outcome.exception(), RouteNotFoundError)
         else None,
     )
@@ -127,6 +133,9 @@ class YahooTransitScraper:
                 cost=cost,
                 transfer_count=transfer_count,
                 transfers=transfers,
+                departure_time=None,
+                arrival_time=None,
+                search_date=None,
             )
 
         except Exception as e:
@@ -134,14 +143,14 @@ class YahooTransitScraper:
                 raise
             raise ScrapingError(f"Failed to parse route data: {str(e)}") from e
 
-    def _extract_duration(self, route_summary) -> str:
+    def _extract_duration(self, route_summary: Tag) -> str:
         """Extract duration from route summary."""
         time_element = route_summary.find("li", class_="time")
         if not time_element:
             raise ScrapingError("Could not find duration information")
         return time_element.get_text().strip()
 
-    def _extract_transfer_count(self, route_summary) -> int:
+    def _extract_transfer_count(self, route_summary: Tag) -> int:
         """Extract transfer count from route summary."""
         transfer_element = route_summary.find("li", class_="transfer")
         if not transfer_element:
@@ -152,16 +161,16 @@ class YahooTransitScraper:
         match = re.search(r"(\d+)", transfer_text)
         return int(match.group(1)) if match else 0
 
-    def _extract_cost(self, route_summary) -> str:
+    def _extract_cost(self, route_summary: Tag) -> str:
         """Extract cost from route summary."""
         fare_element = route_summary.find("li", class_="fare")
         if not fare_element:
             raise ScrapingError("Could not find fare information")
         return fare_element.get_text().strip()
 
-    def _extract_transfers(self, soup) -> list[Transfer]:
+    def _extract_transfers(self, soup: BeautifulSoup) -> list[Transfer]:
         """Extract detailed transfer information."""
-        transfers = []
+        transfers: list[Transfer] = []
 
         # Get route detail section
         route_detail = soup.find("div", class_="routeDetail")
@@ -216,6 +225,8 @@ class YahooTransitScraper:
                     line_name=lines[i] if i < len(lines) else "Unknown",
                     duration_minutes=durations[i] if i < len(durations) else 0,
                     cost_yen=fares[i] if i < len(fares) else 0,
+                    departure_time=None,
+                    arrival_time=None,
                 )
                 transfers.append(transfer)
 

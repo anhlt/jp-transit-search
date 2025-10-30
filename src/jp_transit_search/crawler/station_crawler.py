@@ -5,6 +5,7 @@ import json
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -19,10 +20,39 @@ from ..core.models import Station
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class CrawlState:
+    """State for resumable crawling."""
+    completed_prefectures: list[str] = field(default_factory=list)
+    completed_lines: dict[str, list[str]] = field(default_factory=dict)
+    current_prefecture_index: int | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dict for JSON serialization."""
+        return {
+            "completed_prefectures": self.completed_prefectures,
+            "completed_lines": self.completed_lines,
+            "current_prefecture_index": self.current_prefecture_index,
+        }
+
+
+@dataclass
+class StationDetails:
+    """Details for a station."""
+    city: str | None = None
+    station_code: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    aliases: list[str] | None = None
+    line_name_kana: str | None = None
+    line_color: str | None = None
+    all_lines: list[str] | None = None
+
+
 class CrawlingProgress:
     """Track crawling progress and statistics."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.start_time = datetime.now()
         self.stations_found = 0
         self.duplicates_filtered = 0
@@ -68,7 +98,7 @@ class CrawlingProgress:
 class StationCrawler:
     """Crawler for Japanese train station data."""
 
-    def __init__(self, timeout: int = 30, progress_callback: Callable | None = None):
+    def __init__(self, timeout: int = 30, progress_callback: Callable[[dict[str, Any]], None] | None = None):
         """Initialize the station crawler.
 
         Args:
@@ -83,7 +113,7 @@ class StationCrawler:
             }
         )
         self.stations: list[Station] = []
-        self.existing_stations: set[tuple] = set()  # For deduplication
+        self.existing_stations: set[tuple[str, str | None]] = set()  # For deduplication
         self.progress = CrawlingProgress()
         self.progress_callback = progress_callback
         self.state_file: Path | None = None
@@ -303,7 +333,7 @@ class StationCrawler:
             logger.warning(f"Failed to load existing stations: {e}")
             self.existing_stations = set()
 
-    def _save_crawl_state(self, state: dict[str, Any]) -> None:
+    def _save_crawl_state(self, state: CrawlState) -> None:
         """Save current crawling state to disk.
 
         Args:
@@ -313,28 +343,24 @@ class StationCrawler:
             return
 
         try:
-            state["progress"] = self.progress.to_dict()
-            state["timestamp"] = datetime.now().isoformat()
+            state_dict = state.to_dict()
+            state_dict["progress"] = self.progress.to_dict()
+            state_dict["timestamp"] = datetime.now().isoformat()
 
             with open(self.state_file, "w", encoding="utf-8") as f:
-                json.dump(state, f, indent=2, ensure_ascii=False)
+                json.dump(state_dict, f, indent=2, ensure_ascii=False)
 
         except Exception as e:
             logger.warning(f"Failed to save crawl state: {e}")
 
-    def _load_crawl_state(self) -> dict[str, Any]:
+    def _load_crawl_state(self) -> CrawlState:
         """Load previous crawling state from disk.
 
         Returns:
             Previous crawling state or empty dict
         """
         if not self.state_file or not self.state_file.exists():
-            return {
-                "completed_prefectures": [],
-                "completed_lines": {},
-                "current_prefecture_index": 0,
-                "current_line_index": 0,
-            }
+            return CrawlState()
 
         try:
             with open(self.state_file, encoding="utf-8") as f:
@@ -344,16 +370,15 @@ class StationCrawler:
             if "progress" in state:
                 self.progress = CrawlingProgress.from_dict(state["progress"])
 
-            return state
+            return CrawlState(
+                completed_prefectures=state.get("completed_prefectures", []),
+                completed_lines=state.get("completed_lines", {}),
+                current_prefecture_index=state.get("current_prefecture_index"),
+            )
 
         except Exception as e:
             logger.warning(f"Failed to load crawl state: {e}")
-            return {
-                "completed_prefectures": [],
-                "completed_lines": {},
-                "current_prefecture_index": 0,
-                "current_line_index": 0,
-            }
+            return CrawlState()
 
     def _update_progress(self, message: str, increment_stations: int = 0) -> None:
         """Update progress and notify callback.
@@ -412,7 +437,7 @@ class StationCrawler:
             )
 
     def _crawl_yahoo_transit_stations_resumable(
-        self, crawl_state: dict[str, Any]
+        self, crawl_state: CrawlState
     ) -> None:
         """Crawl station data from Yahoo Transit with resume capability."""
         logger.info("Crawling Yahoo Transit station data (resumable)")
@@ -425,8 +450,8 @@ class StationCrawler:
             {"code": "12", "name": "千葉県"},
         ]
 
-        completed_prefectures = set(crawl_state.get("completed_prefectures", []))
-        start_index = crawl_state.get("current_prefecture_index", 0)
+        completed_prefectures = set(crawl_state.completed_prefectures)
+        start_index = crawl_state.current_prefecture_index or 0
 
         for i, pref in enumerate(prefectures_to_crawl[start_index:], start_index):
             pref_key = f"{pref['code']}_{pref['name']}"
@@ -445,8 +470,8 @@ class StationCrawler:
 
                 # Mark prefecture as completed
                 completed_prefectures.add(pref_key)
-                crawl_state["completed_prefectures"] = list(completed_prefectures)
-                crawl_state["current_prefecture_index"] = i + 1
+                crawl_state.completed_prefectures = list(completed_prefectures)
+                crawl_state.current_prefecture_index = i + 1
                 self.progress.prefectures_completed += 1
 
                 # Save state after each prefecture
@@ -463,11 +488,11 @@ class StationCrawler:
     )
     def _crawl_yahoo_transit_stations(self) -> None:
         """Legacy method - use _crawl_yahoo_transit_stations_resumable instead."""
-        crawl_state = {"completed_prefectures": [], "completed_lines": {}}
+        crawl_state = CrawlState()
         self._crawl_yahoo_transit_stations_resumable(crawl_state)
 
     def _crawl_prefecture_stations_resumable(
-        self, pref_code: str, pref_name: str, crawl_state: dict[str, Any]
+        self, pref_code: str, pref_name: str, crawl_state: CrawlState
     ) -> None:
         """Crawl all railway lines in a prefecture with resume capability.
 
@@ -488,7 +513,7 @@ class StationCrawler:
             # Find all railway line links
             line_links = []
             for link in soup.find_all("a", href=True):
-                href = link.get("href", "")
+                href = str(link.get("href", ""))
                 text = link.get_text().strip()
 
                 # Look for line links in format /station/{pref_code}/{company}/{line}
@@ -501,7 +526,7 @@ class StationCrawler:
             # Get completed lines for this prefecture
             pref_key = f"{pref_code}_{pref_name}"
             completed_lines = set(
-                crawl_state.get("completed_lines", {}).get(pref_key, [])
+                crawl_state.completed_lines.get(pref_key, [])
             )
 
             stations_batch = []
@@ -525,9 +550,9 @@ class StationCrawler:
 
                     # Mark line as completed
                     completed_lines.add(line_key)
-                    if pref_key not in crawl_state["completed_lines"]:
-                        crawl_state["completed_lines"][pref_key] = []
-                    crawl_state["completed_lines"][pref_key] = list(completed_lines)
+                    if pref_key not in crawl_state.completed_lines:
+                        crawl_state.completed_lines[pref_key] = []
+                    crawl_state.completed_lines[pref_key] = list(completed_lines)
                     self.progress.lines_completed += 1
 
                     # Checkpoint save every batch or when reaching checkpoint interval
@@ -562,11 +587,11 @@ class StationCrawler:
 
     def _crawl_prefecture_stations(self, pref_code: str, pref_name: str) -> None:
         """Legacy method - use _crawl_prefecture_stations_resumable instead."""
-        crawl_state = {"completed_lines": {}}
+        crawl_state = CrawlState()
         self._crawl_prefecture_stations_resumable(pref_code, pref_name, crawl_state)
 
     def _parse_yahoo_line_page(
-        self, url: str, line_name: str, prefecture: str = None
+        self, url: str, line_name: str, prefecture: str | None = None
     ) -> None:
         """Parse a Yahoo Transit line page to extract stations.
 
@@ -586,7 +611,7 @@ class StationCrawler:
             stations_found = []
 
             for link in soup.find_all("a", href=True):
-                href = link.get("href", "")
+                href = str(link.get("href", ""))
                 text = link.get_text().strip()
 
                 # Look for station links with query parameters
@@ -623,18 +648,18 @@ class StationCrawler:
                 station = Station(
                     name=station_name,
                     prefecture=station_prefecture,
-                    city=station_details.get("city"),
+                    city=station_details.city,
                     railway_company=railway_company,
                     line_name=line_name,
-                    station_code=station_details.get("station_code"),
-                    latitude=station_details.get("latitude"),
-                    longitude=station_details.get("longitude"),
-                    aliases=station_details.get("aliases", []),
-                    line_name_kana=station_details.get("line_name_kana"),
-                    line_color=station_details.get("line_color"),
+                    station_code=station_details.station_code,
+                    latitude=station_details.latitude,
+                    longitude=station_details.longitude,
+                    aliases=station_details.aliases or [],
+                    line_name_kana=station_details.line_name_kana,
+                    line_color=station_details.line_color,
                     line_type=self._get_line_type(line_name),
                     company_code=self._get_company_code(railway_company),
-                    all_lines=station_details.get("all_lines", []),
+                    all_lines=station_details.all_lines or [],
                 )
 
                 self.stations.append(station)
@@ -647,7 +672,7 @@ class StationCrawler:
             raise ScrapingError(f"Failed to parse Yahoo Transit page: {e}") from e
 
     def _parse_yahoo_line_page_resumable(
-        self, url: str, line_name: str, prefecture: str = None
+        self, url: str, line_name: str, prefecture: str | None = None
     ) -> list[Station]:
         """Parse a Yahoo Transit line page to extract stations (resumable version).
 
@@ -672,7 +697,7 @@ class StationCrawler:
             stations_found = []
 
             for link in soup.find_all("a", href=True):
-                href = link.get("href", "")
+                href = str(link.get("href", ""))
                 text = link.get_text().strip()
 
                 # Look for station links with query parameters
@@ -715,18 +740,18 @@ class StationCrawler:
                 station = Station(
                     name=station_name,
                     prefecture=station_prefecture,
-                    city=station_details.get("city"),
+                    city=station_details.city,
                     railway_company=railway_company,
                     line_name=line_name,
-                    station_code=station_details.get("station_code"),
-                    latitude=station_details.get("latitude"),
-                    longitude=station_details.get("longitude"),
-                    aliases=station_details.get("aliases", []),
-                    line_name_kana=station_details.get("line_name_kana"),
-                    line_color=station_details.get("line_color"),
+                    station_code=station_details.station_code,
+                    latitude=station_details.latitude,
+                    longitude=station_details.longitude,
+                    aliases=station_details.aliases or [],
+                    line_name_kana=station_details.line_name_kana,
+                    line_color=station_details.line_color,
                     line_type=self._get_line_type(line_name),
                     company_code=self._get_company_code(railway_company),
-                    all_lines=station_details.get("all_lines", []),
+                    all_lines=station_details.all_lines or [],
                 )
 
                 line_stations.append(station)
@@ -762,7 +787,7 @@ class StationCrawler:
             "line": params.get("line", [""])[0],
         }
 
-    def _get_station_details(self, station_href: str) -> dict[str, Any]:
+    def _get_station_details(self, station_href: str) -> StationDetails:
         """Get detailed station information from station page.
 
         Args:
@@ -771,16 +796,7 @@ class StationCrawler:
         Returns:
             Dictionary with station details
         """
-        details = {
-            "city": None,
-            "station_code": None,
-            "latitude": None,
-            "longitude": None,
-            "aliases": [],
-            "line_name_kana": None,
-            "line_color": None,
-            "all_lines": [],
-        }
+        details = StationDetails()
 
         try:
             # Make full URL
@@ -805,7 +821,9 @@ class StationCrawler:
                     if station_match:
                         station_name_with_pref = station_match.group(1)
                         if "(" in station_name_with_pref:
-                            details["aliases"].append(station_name_with_pref)
+                            if details.aliases is None:
+                                details.aliases = []
+                            details.aliases.append(station_name_with_pref)
 
                 # Extract all lines serving this station
                 line_elements = soup.find_all("a", href=True)
@@ -823,7 +841,7 @@ class StationCrawler:
                         ):
                             lines_found.add(text)
 
-                details["all_lines"] = list(lines_found)
+                details.all_lines = list(lines_found)
 
                 # Extract city/ward information
                 # Try broader patterns for different prefectures
@@ -842,7 +860,7 @@ class StationCrawler:
                 for pattern in city_patterns:
                     matches = re.findall(pattern, page_text)
                     if matches:
-                        details["city"] = matches[0]
+                        details.city = matches[0]
                         break
 
                 # Look for station codes with more comprehensive patterns
@@ -859,9 +877,9 @@ class StationCrawler:
                         # Take the first reasonable match
                         for match in matches:
                             if len(match) <= 10:  # Reasonable length
-                                details["station_code"] = match
+                                details.station_code = match
                                 break
-                        if details["station_code"]:
+                        if details.station_code:
                             break
 
                 # Look for coordinates in the page (sometimes embedded in maps)
@@ -876,8 +894,8 @@ class StationCrawler:
                     if matches:
                         if len(matches[0]) == 2:  # lat,lng pair
                             try:
-                                details["latitude"] = float(matches[0][0])
-                                details["longitude"] = float(matches[0][1])
+                                details.latitude = float(matches[0][0])
+                                details.longitude = float(matches[0][1])
                                 break
                             except ValueError:
                                 continue
@@ -892,7 +910,7 @@ class StationCrawler:
                 for pattern in color_patterns:
                     matches = re.findall(pattern, page_text)
                     if matches:
-                        details["line_color"] = matches[0]
+                        details.line_color = matches[0]
                         break
 
             # Add small delay to be respectful
@@ -996,7 +1014,7 @@ class StationCrawler:
         Returns:
             List of unique stations
         """
-        seen: set[tuple] = set()
+        seen: set[tuple[str, str | None]] = set()
         unique_stations = []
 
         for station in self.stations:

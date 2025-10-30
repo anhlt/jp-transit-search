@@ -1,6 +1,7 @@
 """CLI commands for station management."""
 
 from pathlib import Path
+from typing import Any, cast
 
 import click
 from rich.console import Console
@@ -17,7 +18,7 @@ console = Console()
 
 
 @click.group()
-def stations():
+def stations() -> None:
     """Station management commands."""
     pass
 
@@ -41,7 +42,7 @@ def stations():
     default="data/crawl_state.json",
     help="State file for tracking progress",
 )
-def crawl_stations(output: str, timeout: int, resume: bool, state_file: str):
+def crawl_stations(output: str, timeout: int, resume: bool, state_file: str) -> None:
     """Crawl station data from Yahoo Transit with resumable functionality.
 
     The crawler shows detailed progress including:
@@ -76,7 +77,7 @@ def crawl_stations(output: str, timeout: int, resume: bool, state_file: str):
         "elapsed_time": 0,
     }
 
-    def update_progress_display(data):
+    def update_progress_display(data: dict[str, Any]) -> None:
         """Update progress display with current crawling status."""
         nonlocal progress_data
         progress_data.update(data)
@@ -190,7 +191,7 @@ def crawl_stations(output: str, timeout: int, resume: bool, state_file: str):
     )
     console.print(f"[green]✓ Results saved to:[/green] {output_path}")
 
-    if progress_data["errors"] > 0:
+    if cast(int, progress_data["errors"]) > 0:
         console.print(
             f"[yellow]⚠ {progress_data['errors']} errors encountered during crawling[/yellow]"
         )
@@ -210,7 +211,7 @@ def crawl_stations(output: str, timeout: int, resume: bool, state_file: str):
 @click.option("--exact", is_flag=True, help="Exact match only")
 def search_stations(
     query: str, prefecture: str | None, limit: int, data: str, exact: bool
-):
+) -> None:
     """Search for stations by name.
 
     Examples:
@@ -290,7 +291,7 @@ def search_stations(
     default="table",
     help="Output format",
 )
-def list_stations(prefecture: str | None, limit: int, data: str, output_format: str):
+def list_stations(prefecture: str | None, limit: int, data: str, output_format: str) -> None:
     """List stations.
 
     Examples:
@@ -412,7 +413,7 @@ def list_stations(prefecture: str | None, limit: int, data: str, output_format: 
     default="data/stations.csv",
     help="Station data CSV file",
 )
-def station_info(data: str):
+def station_info(data: str) -> None:
     """Show station database information.
 
     Examples:

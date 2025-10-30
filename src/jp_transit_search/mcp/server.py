@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 class TransitMCPServer:
     """MCP Server for Japanese Transit Search functionality."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the Transit MCP Server."""
         self.server = Server("jp-transit-search")
         self.scraper = YahooTransitScraper()
