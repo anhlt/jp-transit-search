@@ -48,8 +48,8 @@ jobs:
           mkdir -p data
           echo "📁 Created data directory"
           
-       - name: Run station crawler
-         run: |
+      - name: Run station crawler
+        run: |
            echo "🚀 Starting station data crawling..."
            uv run jp-transit stations crawl \
              --output data/stations.csv \
