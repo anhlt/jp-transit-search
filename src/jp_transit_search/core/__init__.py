@@ -13,7 +13,7 @@ from .scraper import YahooTransitScraper
 
 __all__ = [
     "Route",
-    "RouteSearchRequest", 
+    "RouteSearchRequest",
     "Station",
     "Transfer",
     "YahooTransitScraper",

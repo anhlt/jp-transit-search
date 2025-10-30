@@ -160,8 +160,6 @@ class TestTransitMCPServer:
         assert "Company:" in text_content
         assert "Line:" in text_content
 
-
-
     @pytest.mark.asyncio
     async def test_list_station_database_success(self, server, sample_stations):
         """Test successful station database listing."""
@@ -245,6 +243,3 @@ class TestTransitMCPServer:
         # but we can check that the server has the expected methods
         assert hasattr(server.server, "list_tools")
         assert callable(server.server.list_tools)
-
-
-
