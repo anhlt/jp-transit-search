@@ -1,0 +1,190 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jp-transit-search"
+version = "0.1.0"
+description = "Japanese transit time search with CLI and MCP client capabilities"
+authors = [
+    {name = "anhlt", email = "tuananh.kirimaru@gmail.com"}
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+keywords = ["japan", "transit", "railway", "cli", "mcp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+# Core dependencies
+dependencies = [
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "click>=8.1.0",
+    "pandas>=2.0.0",
+    "pydantic>=2.0.0",
+    "aiohttp>=3.8.0",
+    "lxml>=4.9.0",
+    "tenacity>=8.2.0",
+    "rich>=13.0.0",
+    # MCP server dependencies
+    "mcp>=0.9.0",
+]
+
+# Development dependencies
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "pytest-httpx>=0.21.0",
+    "pytest-click>=1.1.0",
+    "pytest-xdist>=3.3.0",
+    "pytest-html>=3.2.0",
+    "pytest-benchmark>=4.0.0",
+    "responses>=0.23.0",
+    "freezegun>=1.2.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.0.0",
+]
+
+# CLI entry points
+[project.scripts]
+jp-transit = "jp_transit_search.cli.main:cli"
+jp-transit-mcp = "jp_transit_search.mcp.server:main_sync"
+
+# Optional dependencies for different use cases
+[project.optional-dependencies]
+crawler = ["scrapy>=2.11.0", "selenium>=4.15.0"]
+visualization = ["matplotlib>=3.7.0", "plotly>=5.17.0"]
+performance = ["uvloop>=0.19.0", "orjson>=3.9.0"]
+
+# URLs
+[project.urls]
+Homepage = "https://github.com/yourusername/jp-transit-search"
+Repository = "https://github.com/yourusername/jp-transit-search"
+Documentation = "https://jp-transit-search.readthedocs.io"
+Issues = "https://github.com/yourusername/jp-transit-search/issues"
+
+# Hatchling build configuration
+[tool.hatch.build.targets.wheel]
+packages = ["src/jp_transit_search"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/README.md",
+]
+
+# Tool configurations
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=jp_transit_search",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-report=html:htmlcov",
+    "--cov-report=xml",
+    "--cov-fail-under=85",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "network: marks tests that require network access",
+    "cli: marks CLI-specific tests",
+    "mcp: marks MCP-specific tests",
+    "crawler: marks crawler-specific tests",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py310']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**/*" = ["B011", "B018"]
+
+[tool.mypy]
+python_version = "3.10"
+check_untyped_defs = true
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.coverage.run]
+source = ["jp_transit_search"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
