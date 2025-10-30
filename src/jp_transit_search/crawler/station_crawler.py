@@ -19,6 +19,20 @@ from ..core.models import Station
 
 logger = logging.getLogger(__name__)
 
+# JIS X 0401 prefecture codes mapping
+PREFECTURE_ID_MAPPING = {
+    "北海道": "01", "青森県": "02", "岩手県": "03", "宮城県": "04", "秋田県": "05",
+    "山形県": "06", "福島県": "07", "茨城県": "08", "栃木県": "09", "群馬県": "10",
+    "埼玉県": "11", "千葉県": "12", "東京都": "13", "神奈川県": "14", "新潟県": "15",
+    "富山県": "16", "石川県": "17", "福井県": "18", "山梨県": "19", "長野県": "20",
+    "岐阜県": "21", "静岡県": "22", "愛知県": "23", "三重県": "24", "滋賀県": "25",
+    "京都府": "26", "大阪府": "27", "兵庫県": "28", "奈良県": "29", "和歌山県": "30",
+    "鳥取県": "31", "島根県": "32", "岡山県": "33", "広島県": "34", "山口県": "35",
+    "徳島県": "36", "香川県": "37", "愛媛県": "38", "高知県": "39", "福岡県": "40",
+    "佐賀県": "41", "長崎県": "42", "熊本県": "43", "大分県": "44", "宮崎県": "45",
+    "鹿児島県": "46", "沖縄県": "47"
+}
+
 
 @dataclass
 class CrawlState:
@@ -39,14 +53,17 @@ class CrawlState:
 @dataclass
 class StationDetails:
     """Details for a station."""
-    city: str | None = None
-    station_code: str | None = None
-    latitude: float | None = None
-    longitude: float | None = None
+    # city field removed - not available from Yahoo Transit data source
+    # latitude, longitude, line_name_kana, line_color, station_code removed - no data available
+    prefecture_id: str | None = None
+    station_id: str | None = None  # Keep station_id - extractable from URLs
     aliases: list[str] | None = None
-    line_name_kana: str | None = None
-    line_color: str | None = None
     all_lines: list[str] | None = None
+
+    # Enhanced fields for better data extraction
+    station_reading: str | None = None  # Kana reading from <span class="staKana">
+    company_name: str | None = None  # Railway company from JSON data
+    line_name: str | None = None  # Primary line name from JSON data
 
 
 class CrawlingProgress:
@@ -184,15 +201,11 @@ class StationCrawler:
             fieldnames = [
                 "name",
                 "prefecture",
-                "city",
+                "prefecture_id",
+                "station_id",
                 "railway_company",
                 "line_name",
-                "station_code",
-                "latitude",
-                "longitude",
                 "aliases",
-                "line_name_kana",
-                "line_color",
                 "line_type",
                 "company_code",
                 "all_lines",
@@ -205,15 +218,11 @@ class StationCrawler:
                     {
                         "name": station.name,
                         "prefecture": station.prefecture or "",
-                        "city": station.city or "",
+                        "prefecture_id": station.prefecture_id or "",
+                        "station_id": station.station_id or "",
                         "railway_company": station.railway_company or "",
                         "line_name": station.line_name or "",
-                        "station_code": station.station_code or "",
-                        "latitude": station.latitude or "",
-                        "longitude": station.longitude or "",
                         "aliases": "|".join(station.aliases) if station.aliases else "",
-                        "line_name_kana": station.line_name_kana or "",
-                        "line_color": station.line_color or "",
                         "line_type": station.line_type or "",
                         "company_code": station.company_code or "",
                         "all_lines": "|".join(station.all_lines)
@@ -240,15 +249,11 @@ class StationCrawler:
             fieldnames = [
                 "name",
                 "prefecture",
-                "city",
+                "prefecture_id",
+                "station_id",
                 "railway_company",
                 "line_name",
-                "station_code",
-                "latitude",
-                "longitude",
                 "aliases",
-                "line_name_kana",
-                "line_color",
                 "line_type",
                 "company_code",
                 "all_lines",
@@ -263,15 +268,11 @@ class StationCrawler:
                     {
                         "name": station.name,
                         "prefecture": station.prefecture or "",
-                        "city": station.city or "",
+                        "prefecture_id": station.prefecture_id or "",
+                        "station_id": station.station_id or "",
                         "railway_company": station.railway_company or "",
                         "line_name": station.line_name or "",
-                        "station_code": station.station_code or "",
-                        "latitude": station.latitude or "",
-                        "longitude": station.longitude or "",
                         "aliases": "|".join(station.aliases) if station.aliases else "",
-                        "line_name_kana": station.line_name_kana or "",
-                        "line_color": station.line_color or "",
                         "line_type": station.line_type or "",
                         "company_code": station.company_code or "",
                         "all_lines": "|".join(station.all_lines)
@@ -299,18 +300,19 @@ class StationCrawler:
                 aliases = row["aliases"].split("|") if row.get("aliases") else []
                 all_lines = row["all_lines"].split("|") if row.get("all_lines") else []
 
+                # Generate prefecture_id from prefecture name if not in CSV
+                prefecture_id = row.get("prefecture_id")
+                if not prefecture_id and row.get("prefecture"):
+                    prefecture_id = PREFECTURE_ID_MAPPING.get(row["prefecture"])
+
                 station = Station(
                     name=row["name"],
                     prefecture=row["prefecture"] or None,
-                    city=row["city"] or None,
+                    prefecture_id=prefecture_id or None,
+                    station_id=row.get("station_id") or None,
                     railway_company=row["railway_company"] or None,
                     line_name=row["line_name"] or None,
-                    station_code=row["station_code"] or None,
-                    latitude=float(row["latitude"]) if row["latitude"] else None,
-                    longitude=float(row["longitude"]) if row["longitude"] else None,
                     aliases=aliases,
-                    line_name_kana=row.get("line_name_kana") or None,
-                    line_color=row.get("line_color") or None,
                     line_type=row.get("line_type") or None,
                     company_code=row.get("company_code") or None,
                     all_lines=all_lines,
@@ -648,15 +650,11 @@ class StationCrawler:
                 station = Station(
                     name=station_name,
                     prefecture=station_prefecture,
-                    city=station_details.city,
+                    prefecture_id=station_details.prefecture_id,
+                    station_id=station_details.station_id,
                     railway_company=railway_company,
                     line_name=line_name,
-                    station_code=station_details.station_code,
-                    latitude=station_details.latitude,
-                    longitude=station_details.longitude,
                     aliases=station_details.aliases or [],
-                    line_name_kana=station_details.line_name_kana,
-                    line_color=station_details.line_color,
                     line_type=self._get_line_type(line_name),
                     company_code=self._get_company_code(railway_company),
                     all_lines=station_details.all_lines or [],
@@ -740,15 +738,11 @@ class StationCrawler:
                 station = Station(
                     name=station_name,
                     prefecture=station_prefecture,
-                    city=station_details.city,
+                    prefecture_id=station_details.prefecture_id,
+                    station_id=station_details.station_id,
                     railway_company=railway_company,
                     line_name=line_name,
-                    station_code=station_details.station_code,
-                    latitude=station_details.latitude,
-                    longitude=station_details.longitude,
                     aliases=station_details.aliases or [],
-                    line_name_kana=station_details.line_name_kana,
-                    line_color=station_details.line_color,
                     line_type=self._get_line_type(line_name),
                     company_code=self._get_company_code(railway_company),
                     all_lines=station_details.all_lines or [],
@@ -808,7 +802,6 @@ class StationCrawler:
             response = self.session.get(station_url, timeout=self.timeout)
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, "html.parser")
-                page_text = soup.get_text()
 
                 # Extract station name with prefecture disambiguation
                 title_elem = soup.find("title")
@@ -826,13 +819,14 @@ class StationCrawler:
                             details.aliases.append(station_name_with_pref)
 
                 # Extract all lines serving this station
-                line_elements = soup.find_all("a", href=True)
+                # Look for both link elements and dt elements (which contain line names)
+                line_elements = soup.find_all("a", href=True) + soup.find_all("dt")
                 lines_found = set()
                 for elem in line_elements:
                     text = elem.get_text().strip()
 
-                    # Look for line links or line names
-                    if ("線" in text or "Line" in text) and len(text) < 30:
+                    # Look for line links or line names (including 市電, 電車, etc.)
+                    if ("線" in text or "Line" in text or "市電" in text or "電車" in text) and len(text) < 30:
                         # Filter out common non-line texts
                         exclude_terms = ["路線図", "路線情報", "線路", "新幹線情報"]
                         if (
@@ -843,75 +837,72 @@ class StationCrawler:
 
                 details.all_lines = list(lines_found)
 
-                # Extract city/ward information
-                # Try broader patterns for different prefectures
-                city_patterns = [
-                    # Tokyo wards
-                    r"(千代田区|中央区|港区|新宿区|文京区|台東区|墨田区|江東区|品川区|目黒区|大田区|世田谷区|渋谷区|中野区|杉並区|豊島区|北区|荒川区|板橋区|練馬区|足立区|葛飾区|江戸川区)",
-                    # Other cities
-                    r"([^\\s]+市)",
-                    r"([^\\s]+町)",
-                    r"([^\\s]+村)",
-                    r"([^\\s]+郡)",
-                ]
-
+                # Extract station ID from URL
                 import re
+                station_id_match = re.search(r"/station/(\d+)", station_url)
+                if station_id_match:
+                    details.station_id = station_id_match.group(1)
 
-                for pattern in city_patterns:
-                    matches = re.findall(pattern, page_text)
-                    if matches:
-                        details.city = matches[0]
-                        break
+                # Extract station reading (kana) from HTML
+                station_kana_elem = soup.find("span", class_="staKana")
+                if station_kana_elem:
+                    details.station_reading = station_kana_elem.get_text().strip()
 
-                # Look for station codes with more comprehensive patterns
-                code_patterns = [
-                    r"[A-Z]{1,4}-[A-Z]?\\d{2,3}",  # JR-Y01, M-01, etc.
-                    r"[A-Z]{2,3}\\d{2,3}",  # JY01, JR01, etc.
-                    r"[A-Z]\\d{2}",  # Y01, M01, etc.
-                    r"\\b[A-Z]{1,2}-\\d{1,3}\\b",  # Alternative formats
-                ]
+                # Extract company and line info from JSON data structure
+                script_tags = soup.find_all("script", type="application/json")
+                for script in script_tags:
+                    try:
+                        import json
+                        json_data = json.loads(script.string or "")
+                        # Look for Next.js data structure
+                        if "props" in json_data and "pageProps" in json_data["props"]:
+                            page_props = json_data["props"]["pageProps"]
 
-                for pattern in code_patterns:
-                    matches = re.findall(pattern, page_text)
-                    if matches:
-                        # Take the first reasonable match
-                        for match in matches:
-                            if len(match) <= 10:  # Reasonable length
-                                details.station_code = match
-                                break
-                        if details.station_code:
-                            break
+                            # Try multiple JSON paths for company/line info
 
-                # Look for coordinates in the page (sometimes embedded in maps)
-                coord_patterns = [
-                    r"(\\d+\\.\\d+),(\\d+\\.\\d+)",  # lat,lng format
-                    r"lat[^\\d]*(\\d+\\.\\d+)",  # latitude
-                    r"lng[^\\d]*(\\d+\\.\\d+)",  # longitude
-                ]
+                            # Path 1: Traditional station data structure
+                            if "station" in page_props:
+                                station_data = page_props["station"]
+                                if "company" in station_data:
+                                    details.company_name = station_data["company"]
+                                if "line" in station_data:
+                                    details.line_name = station_data["line"]
 
-                for pattern in coord_patterns:
-                    matches = re.findall(pattern, page_text)
-                    if matches:
-                        if len(matches[0]) == 2:  # lat,lng pair
-                            try:
-                                details.latitude = float(matches[0][0])
-                                details.longitude = float(matches[0][1])
-                                break
-                            except ValueError:
-                                continue
+                            # Path 2: lipFeature.TransitSearchInfo.Detail structure (more common)
+                            if not details.company_name and "lipFeature" in page_props:
+                                lip_feature = page_props["lipFeature"]
+                                if "TransitSearchInfo" in lip_feature:
+                                    transit_info = lip_feature["TransitSearchInfo"]
+                                    if "Detail" in transit_info:
+                                        detail = transit_info["Detail"]
+                                        if "CompanyName" in detail:
+                                            details.company_name = detail["CompanyName"]
+                                        if "RailName" in detail:
+                                            details.line_name = detail["RailName"]
 
-                # Extract line color information (if available in page)
-                # This might be in CSS or data attributes
-                color_patterns = [
-                    r"#[0-9A-Fa-f]{6}",  # Hex colors
-                    r"rgb\\((\\d+,\\s*\\d+,\\s*\\d+)\\)",  # RGB colors
-                ]
+                    except (json.JSONDecodeError, KeyError):
+                        continue
 
-                for pattern in color_patterns:
-                    matches = re.findall(pattern, page_text)
-                    if matches:
-                        details.line_color = matches[0]
-                        break
+                # Also try to extract from URL parameters which contain company and line info
+                if "?" in station_url:
+                    from urllib.parse import parse_qs, urlparse
+                    parsed_url = urlparse(station_url)
+                    params = parse_qs(parsed_url.query)
+
+                    if "company" in params:
+                        # URL decode the company name
+                        from urllib.parse import unquote
+                        details.company_name = unquote(params["company"][0])
+
+                    if "line" in params:
+                        # URL decode the line name
+                        from urllib.parse import unquote
+                        details.line_name = unquote(params["line"][0])
+
+                # City extraction removed - Yahoo Transit pages don't contain reliable city/ward data
+                # Based on comprehensive analysis, no city information is extractable from page text
+
+                # Station codes, coordinates, and line colors removed - fields deleted from Station model
 
             # Add small delay to be respectful
             import time
@@ -932,13 +923,55 @@ class StationCrawler:
         Returns:
             Prefecture name
         """
-        # Yahoo uses prefecture codes: 13=Tokyo, 14=Kanagawa, etc.
+        # Yahoo uses prefecture codes: 01=Hokkaido, 13=Tokyo, 14=Kanagawa, etc.
         prefecture_map = {
+            "/01/": "北海道",
+            "/02/": "青森県",
+            "/03/": "岩手県",
+            "/04/": "宮城県",
+            "/05/": "秋田県",
+            "/06/": "山形県",
+            "/07/": "福島県",
+            "/08/": "茨城県",
+            "/09/": "栃木県",
+            "/10/": "群馬県",
+            "/11/": "埼玉県",
+            "/12/": "千葉県",
             "/13/": "東京都",
             "/14/": "神奈川県",
-            "/12/": "千葉県",
-            "/11/": "埼玉県",
+            "/15/": "新潟県",
+            "/16/": "富山県",
+            "/17/": "石川県",
+            "/18/": "福井県",
+            "/19/": "山梨県",
+            "/20/": "長野県",
+            "/21/": "岐阜県",
+            "/22/": "静岡県",
+            "/23/": "愛知県",
+            "/24/": "三重県",
+            "/25/": "滋賀県",
+            "/26/": "京都府",
             "/27/": "大阪府",
+            "/28/": "兵庫県",
+            "/29/": "奈良県",
+            "/30/": "和歌山県",
+            "/31/": "鳥取県",
+            "/32/": "島根県",
+            "/33/": "岡山県",
+            "/34/": "広島県",
+            "/35/": "山口県",
+            "/36/": "徳島県",
+            "/37/": "香川県",
+            "/38/": "愛媛県",
+            "/39/": "高知県",
+            "/40/": "福岡県",
+            "/41/": "佐賀県",
+            "/42/": "長崎県",
+            "/43/": "熊本県",
+            "/44/": "大分県",
+            "/45/": "宮崎県",
+            "/46/": "鹿児島県",
+            "/47/": "沖縄県",
         }
 
         for code, prefecture in prefecture_map.items():

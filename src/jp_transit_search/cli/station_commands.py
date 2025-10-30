@@ -256,14 +256,12 @@ def search_stations(
         )
         table.add_column("Name", style="cyan", no_wrap=True)
         table.add_column("Prefecture", style="green")
-        table.add_column("City", style="yellow")
         table.add_column("Railway Company", style="blue")
 
         for station in results:
             table.add_row(
                 station.name,
                 station.prefecture or "",
-                station.city or "",
                 station.railway_company or "",
             )
 
@@ -332,13 +330,14 @@ def list_stations(prefecture: str | None, limit: int, data: str, output_format: 
                 {
                     "name": s.name,
                     "prefecture": s.prefecture,
-                    "city": s.city,
+                    "prefecture_id": s.prefecture_id,
+                    "station_id": s.station_id,
                     "railway_company": s.railway_company,
                     "line_name": s.line_name,
-                    "station_code": s.station_code,
-                    "latitude": s.latitude,
-                    "longitude": s.longitude,
                     "aliases": s.aliases,
+                    "line_type": s.line_type,
+                    "company_code": s.company_code,
+                    "all_lines": s.all_lines,
                 }
                 for s in filtered_stations
             ]
@@ -352,13 +351,14 @@ def list_stations(prefecture: str | None, limit: int, data: str, output_format: 
             fieldnames = [
                 "name",
                 "prefecture",
-                "city",
+                "prefecture_id",
+                "station_id",
                 "railway_company",
                 "line_name",
-                "station_code",
-                "latitude",
-                "longitude",
                 "aliases",
+                "line_type",
+                "company_code",
+                "all_lines",
             ]
             writer = csv.DictWriter(output, fieldnames=fieldnames)
             writer.writeheader()
@@ -368,13 +368,14 @@ def list_stations(prefecture: str | None, limit: int, data: str, output_format: 
                     {
                         "name": station.name,
                         "prefecture": station.prefecture or "",
-                        "city": station.city or "",
+                        "prefecture_id": station.prefecture_id or "",
+                        "station_id": station.station_id or "",
                         "railway_company": station.railway_company or "",
                         "line_name": station.line_name or "",
-                        "station_code": station.station_code or "",
-                        "latitude": station.latitude or "",
-                        "longitude": station.longitude or "",
                         "aliases": "|".join(station.aliases) if station.aliases else "",
+                        "line_type": station.line_type or "",
+                        "company_code": station.company_code or "",
+                        "all_lines": "|".join(station.all_lines) if station.all_lines else "",
                     }
                 )
 
@@ -388,14 +389,12 @@ def list_stations(prefecture: str | None, limit: int, data: str, output_format: 
             )
             table.add_column("Name", style="cyan", no_wrap=True)
             table.add_column("Prefecture", style="green")
-            table.add_column("City", style="yellow")
             table.add_column("Railway Company", style="blue")
 
             for station in filtered_stations:
                 table.add_row(
                     station.name,
                     station.prefecture or "",
-                    station.city or "",
                     station.railway_company or "",
                 )
 

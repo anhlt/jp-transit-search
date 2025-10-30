@@ -40,23 +40,15 @@ def sample_stations():
         Station(
             name="東京駅",
             prefecture="東京都",
-            city="千代田区",
             railway_company="JR東日本",
             line_name="JR東海道本線",
-            station_code="JT01",
-            latitude=35.6812,
-            longitude=139.7671,
             aliases=["Tokyo Station", "とうきょうえき"],
         ),
         Station(
             name="新宿駅",
             prefecture="東京都",
-            city="新宿区",
             railway_company="JR東日本",
             line_name="JR山手線",
-            station_code="JY17",
-            latitude=35.6896,
-            longitude=139.7006,
             aliases=["Shinjuku Station", "しんじゅくえき"],
         ),
     ]
@@ -148,8 +140,8 @@ class TestMCPIntegration:
         # Verify second content is JSON data
         json_content = result[1]
         assert "JSON Data:" in json_content.text
-        assert "lat" in json_content.text  # Updated to match actual JSON format
-        assert "lng" in json_content.text  # Updated to match actual JSON format
+        assert "name" in json_content.text  # Check for actual field in Station model
+        assert "prefecture" in json_content.text  # Check for actual field in Station model
 
         # Verify the station searcher was called correctly
         mcp_server.station_searcher.search_stations.assert_called_once_with(
@@ -205,7 +197,6 @@ class TestMCPIntegration:
         text_content = result[0]
         assert "東京駅" in text_content.text
         assert "東京都" in text_content.text
-        assert "千代田区" in text_content.text
         assert "JR東日本" in text_content.text
 
         # Verify JSON content
