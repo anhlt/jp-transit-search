@@ -81,7 +81,7 @@ class TransitMCPServer:
     def _register_handlers(self) -> None:
         """Register MCP protocol handlers."""
 
-        @self.server.list_tools()
+        @self.server.list_tools()  # type: ignore[no-untyped-call, misc]
         async def handle_list_tools() -> list[Tool]:
             """List available tools."""
             return [
@@ -164,7 +164,7 @@ class TransitMCPServer:
                 ),
             ]
 
-        @self.server.call_tool()
+        @self.server.call_tool()  # type: ignore[misc]
         async def handle_call_tool(
             name: str, arguments: dict[str, Any]
         ) -> list[TextContent]:
