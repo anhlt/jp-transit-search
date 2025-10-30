@@ -85,7 +85,7 @@ class StationCrawler:
         self.state_file: Optional[Path] = None
         self.checkpoint_interval = 50  # Save progress every 50 stations
         
-    def crawl_all_stations(self, resume_from_csv: Optional[Path] = None, 
+    def crawl_all_stations(self, resume_from_csv: Optional[Path] = None,
                           state_file: Optional[Path] = None) -> List[Station]:
         """Crawl station data from multiple sources with resume capability.
         

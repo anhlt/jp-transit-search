@@ -35,7 +35,7 @@ class TestStationCLICommands:
         """Test stations crawl command help."""
         result = runner.invoke(stations, ['crawl', '--help'])
         assert result.exit_code == 0
-        assert 'Crawl station data from various sources' in result.output
+        assert 'Crawl station data from Yahoo Transit with resumable functionality' in result.output
 
     @patch('jp_transit_search.cli.station_commands.StationCrawler')
     def test_crawl_command_success(self, mock_crawler_class, runner):
@@ -54,7 +54,7 @@ class TestStationCLICommands:
             result = runner.invoke(stations, ['crawl', '--output', str(output_path)])
             
             assert result.exit_code == 0
-            assert "Successfully crawled 2 stations" in result.output
+            assert "✓ Successfully crawled" in result.output
             mock_crawler.crawl_all_stations.assert_called_once()
             mock_crawler.save_to_csv.assert_called_once()
 

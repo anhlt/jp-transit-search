@@ -196,33 +196,37 @@ class TestCLI:
         assert result.exit_code == 1
         # Error should be in stderr output, check exit code
     
-    def test_stations_search_command_no_data(self):
+    @patch('pathlib.Path.exists', return_value=False)
+    def test_stations_search_command_no_data(self, mock_exists):
         """Test stations search command with no data file."""
         result = self.runner.invoke(cli, ['stations', 'search', '新宿'])
-        
+
         # Should fail gracefully when no data file exists
         assert result.exit_code == 0
         assert "Station data file not found" in result.output
     
-    def test_stations_search_command_with_prefecture_no_data(self):
+    @patch('pathlib.Path.exists', return_value=False)
+    def test_stations_search_command_with_prefecture_no_data(self, mock_exists):
         """Test stations search command with prefecture filter but no data."""
         result = self.runner.invoke(cli, ['stations', 'search', '駅', '--prefecture', '東京都'])
-        
+
         assert result.exit_code == 0
         assert "Station data file not found" in result.output
     
-    def test_stations_list_command_no_data(self):
+    @patch('pathlib.Path.exists', return_value=False)
+    def test_stations_list_command_no_data(self, mock_exists):
         """Test stations list command with no data file."""
         result = self.runner.invoke(cli, ['stations', 'list'])
-        
+
         # Should fail gracefully when no data file exists
         assert result.exit_code == 0
         assert "Station data file not found" in result.output
     
-    def test_stations_list_command_with_prefecture_no_data(self):
+    @patch('pathlib.Path.exists', return_value=False)
+    def test_stations_list_command_with_prefecture_no_data(self, mock_exists):
         """Test stations list command with prefecture filter but no data."""
         result = self.runner.invoke(cli, ['stations', 'list', '--prefecture', '東京都'])
-        
+
         assert result.exit_code == 0
         assert "Station data file not found" in result.output
     

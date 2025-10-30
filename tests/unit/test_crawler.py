@@ -30,11 +30,10 @@ class TestStationCrawler:
         crawler = StationCrawler()
         assert crawler.timeout == 30
 
-    @patch('jp_transit_search.crawler.station_crawler.StationCrawler._crawl_wikipedia_stations')
-    @patch('jp_transit_search.crawler.station_crawler.StationCrawler._crawl_ekitan_stations')
+    @patch('jp_transit_search.crawler.station_crawler.StationCrawler._crawl_yahoo_transit_stations_resumable')
     @patch('jp_transit_search.crawler.station_crawler.StationCrawler._deduplicate_stations')
-    def test_crawl_all_stations(self, mock_dedupe, mock_ekitan, mock_wiki):
-        """Test crawling all stations from multiple sources."""
+    def test_crawl_all_stations(self, mock_dedupe, mock_crawl):
+        """Test crawling all stations from Yahoo Transit."""
         mock_stations = [
             Station(name="新宿", prefecture="東京都"),
             Station(name="渋谷", prefecture="東京都")
@@ -44,8 +43,7 @@ class TestStationCrawler:
         crawler = StationCrawler()
         result = crawler.crawl_all_stations()
 
-        mock_wiki.assert_called_once()
-        mock_ekitan.assert_called_once()
+        mock_crawl.assert_called_once()
         mock_dedupe.assert_called_once()
         assert result == mock_stations
 
@@ -181,91 +179,7 @@ class TestStationCrawler:
         finally:
             csv_path.unlink()
 
-    @patch('jp_transit_search.crawler.station_crawler.StationCrawler._parse_wikipedia_station_page')
-    def test_crawl_wikipedia_stations(self, mock_parse):
-        """Test crawling Wikipedia stations."""
-        crawler = StationCrawler()
-        crawler._crawl_wikipedia_stations()
-        
-        # Should call parse for each prefecture
-        assert mock_parse.call_count == 4
-        expected_prefectures = ['東京都', '神奈川県', '千葉県', '埼玉県']
-        called_prefectures = [call[0][1] for call in mock_parse.call_args_list]
-        assert all(pref in called_prefectures for pref in expected_prefectures)
 
-    @patch('jp_transit_search.crawler.station_crawler.StationCrawler._parse_wikipedia_station_page')
-    def test_crawl_wikipedia_stations_handles_errors(self, mock_parse):
-        """Test that Wikipedia crawling handles parsing errors."""
-        mock_parse.side_effect = Exception("Parse error")
-        
-        crawler = StationCrawler()
-        # Should not raise an exception despite parse errors
-        crawler._crawl_wikipedia_stations()
-        
-        assert mock_parse.call_count == 4
-
-    @patch('requests.Session.get')
-    def test_parse_wikipedia_station_page(self, mock_get):
-        """Test parsing a Wikipedia station page."""
-        # Mock HTML response with station table
-        html_content = """
-        <html>
-            <body>
-                <table class="wikitable">
-                    <tr><th>駅名</th><th>路線</th></tr>
-                    <tr><td>新宿駅</td><td>JR山手線</td></tr>
-                    <tr><td>渋谷駅</td><td>JR山手線</td></tr>
-                </table>
-            </body>
-        </html>
-        """
-        
-        mock_response = Mock()
-        mock_response.text = html_content
-        mock_response.raise_for_status.return_value = None
-        mock_get.return_value = mock_response
-        
-        crawler = StationCrawler()
-        crawler._parse_wikipedia_station_page("http://example.com", "東京都")
-        
-        # Should have parsed 2 stations
-        assert len(crawler.stations) == 2
-        assert crawler.stations[0].name == "新宿駅"
-        assert crawler.stations[0].prefecture == "東京都"
-        assert crawler.stations[0].railway_company == "JR山手線"
-
-    @patch('requests.Session.get')
-    def test_parse_wikipedia_station_page_network_error(self, mock_get):
-        """Test network error handling in Wikipedia parsing."""
-        mock_get.side_effect = requests.exceptions.RequestException("Network error")
-        
-        crawler = StationCrawler()
-        with pytest.raises(NetworkError):
-            crawler._parse_wikipedia_station_page("http://example.com", "東京都")
-
-    @patch('requests.Session.get')
-    def test_parse_wikipedia_station_page_scraping_error(self, mock_get):
-        """Test scraping error handling in Wikipedia parsing."""
-        mock_response = Mock()
-        mock_response.text = "invalid html"
-        mock_response.raise_for_status.side_effect = Exception("Parse error")
-        mock_get.return_value = mock_response
-        
-        crawler = StationCrawler()
-        with pytest.raises(ScrapingError):
-            crawler._parse_wikipedia_station_page("http://example.com", "東京都")
-
-    def test_crawl_ekitan_stations(self):
-        """Test crawling Ekitan stations (sample implementation)."""
-        crawler = StationCrawler()
-        initial_count = len(crawler.stations)
-        
-        crawler._crawl_ekitan_stations()
-        
-        # Should add sample stations
-        assert len(crawler.stations) > initial_count
-        assert any(s.name == "新宿" for s in crawler.stations)
-        assert any(s.name == "渋谷" for s in crawler.stations)
 
     def test_deduplicate_stations(self):
         """Test station deduplication."""
