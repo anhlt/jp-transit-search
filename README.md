@@ -122,16 +122,15 @@ uv run jp-transit --version
 uv run pytest tests/unit/test_mcp_server.py -v
 ```
 
-### Quick Test Run
+### Running the MCP Server
+
+The MCP server provides the core functionality for transit route planning and station management. Here's how to run it:
 
 ```bash
-# Run the quick start script to verify everything works
-uv run python quickstart.py
-
-# Or manually start the MCP server (it will load sample stations automatically)
+# Start the MCP server (stdio mode for AI assistant integration)
 uv run jp-transit-mcp
 
-# In another terminal, test the Python API
+# Test the server is working
 uv run python -c "
 from jp_transit_search.mcp.server import TransitMCPServer
 import asyncio
@@ -144,6 +143,12 @@ async def test():
 asyncio.run(test())
 "
 ```
+
+The MCP server runs in stdio mode by default, making it compatible with AI assistants like Claude Desktop. When started, it:
+- Loads the station database (sample data if no CSV exists)
+- Listens for MCP protocol requests
+- Provides 7 tools for route search, station management, and CSV operations
+- Automatically handles errors and provides fallback data when Yahoo crawling fails
 
 ## 🤖 Automated Station Data Updates
 
