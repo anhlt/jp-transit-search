@@ -23,7 +23,7 @@ from mcp.types import (
 
 from ..core.scraper import YahooTransitScraper
 from ..core.exceptions import NetworkError, RouteNotFoundError, ScrapingError, ValidationError
-from ..crawler.station_crawler import StationCrawler, StationSearcher
+from ..crawler.station_crawler import StationSearcher
 
 logger = logging.getLogger(__name__)
 
@@ -35,40 +35,37 @@ class TransitMCPServer:
         """Initialize the Transit MCP Server."""
         self.server = Server("jp-transit-search")
         self.scraper = YahooTransitScraper()
-        self.station_crawler = StationCrawler()
         
-        # Initialize station searcher with empty list initially
+        # Initialize station searcher with empty list initially  
         self.station_searcher = StationSearcher([])
         
-        # Load existing stations if available
+        # Load existing stations if available (read-only)
         self._load_stations()
         
         # Register handlers
         self._register_handlers()
     
     def _load_stations(self) -> None:
-        """Load stations from various sources."""
+        """Load stations from CSV file (read-only)."""
         from pathlib import Path
         
         try:
-            # Try to load from CSV file first (faster than crawling)
+            # Try to load from CSV file only (read-only mode)
             csv_file = Path("data/stations.csv")
             if csv_file.exists():
                 logger.info(f"Loading stations from CSV file: {csv_file}")
-                stations = self.station_crawler.load_from_csv(csv_file)
+                # Import StationCrawler only for loading CSV
+                from ..crawler.station_crawler import StationCrawler
+                temp_crawler = StationCrawler()
+                stations = temp_crawler.load_from_csv(csv_file)
                 self.station_searcher = StationSearcher(stations)
                 logger.info(f"Loaded {len(stations)} stations from CSV")
                 return
             
-            # If no CSV file exists, use sample data from crawler
-            logger.info("No CSV file found, using sample station data")
-            stations = []
-            # Call the Ekitan sample method directly
-            self.station_crawler._crawl_ekitan_stations()
-            stations = self.station_crawler.stations
-            
-            self.station_searcher = StationSearcher(stations)
-            logger.info(f"Loaded {len(stations)} sample stations for searching")
+            # If no CSV file exists, start with empty list
+            logger.warning("No CSV file found at data/stations.csv. Starting with empty station list.")
+            logger.info("Use GitHub Action with '/update_station' comment to generate station data.")
+            self.station_searcher = StationSearcher([])
             
         except Exception as e:
             logger.warning(f"Failed to load stations: {e}. Starting with empty station list.")
@@ -135,26 +132,6 @@ class TransitMCPServer:
                     }
                 ),
                 Tool(
-                    name="crawl_stations",
-                    description="Crawl and update station database from web sources (automatically saves to data/stations.csv)",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "prefectures": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "List of prefectures to crawl (optional, crawls all if not specified)"
-                            },
-                            "limit": {
-                                "type": "integer", 
-                                "description": "Maximum number of stations to crawl",
-                                "default": 1000,
-                                "minimum": 1
-                            }
-                        }
-                    }
-                ),
-                Tool(
                     name="list_station_database",
                     description="List all stations in the local database",
                     inputSchema={
@@ -178,22 +155,6 @@ class TransitMCPServer:
                         }
                     }
                 ),
-
-                Tool(
-                    name="load_stations_csv",
-                    description="Load station database from CSV file",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "filename": {
-                                "type": "string",
-                                "description": "CSV filename to load",
-                                "default": "data/stations.csv"
-                            }
-                        },
-                        "required": ["filename"]
-                    }
-                ),
             ]
         
         @self.server.call_tool()
@@ -206,13 +167,8 @@ class TransitMCPServer:
                     return await self._search_stations(arguments)
                 elif name == "get_station_info":
                     return await self._get_station_info(arguments)
-                elif name == "crawl_stations":
-                    return await self._crawl_stations(arguments)
                 elif name == "list_station_database":
                     return await self._list_station_database(arguments)
-
-                elif name == "load_stations_csv":
-                    return await self._load_stations_csv(arguments)
                 else:
                     return [TextContent(type="text", text=f"Unknown tool: {name}")]
             
@@ -382,47 +338,7 @@ class TransitMCPServer:
         except Exception as e:
             return [TextContent(type="text", text=f"Failed to get station info: {str(e)}")]
     
-    async def _crawl_stations(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Crawl and update station database."""
-        prefectures = arguments.get("prefectures")
-        limit = arguments.get("limit", 1000)
-        
-        try:
-            # Use the crawl_all_stations method which handles all prefectures
-            stations = self.station_crawler.crawl_all_stations()
-            
-            # Save the crawled stations to CSV for future use
-            from pathlib import Path
-            csv_file = Path("data/stations.csv")
-            # Ensure data directory exists
-            csv_file.parent.mkdir(exist_ok=True)
-            self.station_crawler.save_to_csv(stations, csv_file)
-            
-            # Update the searcher with new data
-            self.station_searcher = StationSearcher(stations)
-            
-            result_text = f"**Station crawling completed!**\n\n"
-            result_text += f"• **Crawled:** {len(stations)} stations\n"
-            result_text += f"• **Saved to:** {csv_file}\n"
-            
-            if prefectures:
-                result_text += f"• **Requested Prefectures:** {', '.join(prefectures)}\n"
-            
-            # Summary by prefecture
-            prefecture_counts = {}
-            for station in stations:
-                if station.prefecture:
-                    prefecture_counts[station.prefecture] = prefecture_counts.get(station.prefecture, 0) + 1
-            
-            if prefecture_counts:
-                result_text += f"\n**By Prefecture:**\n"
-                for prefecture, count in sorted(prefecture_counts.items()):
-                    result_text += f"• {prefecture}: {count} stations\n"
-            
-            return [TextContent(type="text", text=result_text)]
-            
-        except Exception as e:
-            return [TextContent(type="text", text=f"Station crawling failed: {str(e)}")]
+
     
     async def _list_station_database(self, arguments: Dict[str, Any]) -> List[TextContent]:
         """List stations from the local database."""
@@ -475,42 +391,7 @@ class TransitMCPServer:
     
 
     
-    async def _load_stations_csv(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Load station database from CSV file."""
-        filename = arguments["filename"]
-        
-        try:
-            from pathlib import Path
-            csv_file = Path(filename)
-            
-            if not csv_file.exists():
-                return [TextContent(type="text", text=f"CSV file not found: {csv_file}")]
-            
-            # Load stations from CSV
-            stations = self.station_crawler.load_from_csv(csv_file)
-            
-            # Update the searcher with loaded data
-            self.station_searcher = StationSearcher(stations)
-            
-            result_text = f"**Station database loaded from CSV!**\n\n"
-            result_text += f"• **File:** {csv_file.absolute()}\n"
-            result_text += f"• **Stations loaded:** {len(stations)}\n"
-            
-            # Summary by prefecture
-            prefecture_counts = {}
-            for station in stations:
-                if station.prefecture:
-                    prefecture_counts[station.prefecture] = prefecture_counts.get(station.prefecture, 0) + 1
-            
-            if prefecture_counts:
-                result_text += f"\n**By Prefecture:**\n"
-                for prefecture, count in sorted(prefecture_counts.items()):
-                    result_text += f"• {prefecture}: {count} stations\n"
-            
-            return [TextContent(type="text", text=result_text)]
-            
-        except Exception as e:
-            return [TextContent(type="text", text=f"Failed to load stations from CSV: {str(e)}")]
+
 
 
 async def main() -> None:
