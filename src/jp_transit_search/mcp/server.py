@@ -81,7 +81,7 @@ class TransitMCPServer:
     def _register_handlers(self) -> None:
         """Register MCP protocol handlers."""
 
-        @self.server.list_tools()
+        @self.server.list_tools()  # type: ignore[no-untyped-call, misc]
         async def handle_list_tools() -> list[Tool]:
             """List available tools."""
             return [
@@ -164,7 +164,7 @@ class TransitMCPServer:
                 ),
             ]
 
-        @self.server.call_tool()
+        @self.server.call_tool()  # type: ignore[misc]
         async def handle_call_tool(
             name: str, arguments: dict[str, Any]
         ) -> list[TextContent]:
@@ -270,8 +270,6 @@ class TransitMCPServer:
                 result_text += f"{i}. **{station.name}**"
                 if station.prefecture:
                     result_text += f" - {station.prefecture}"
-                if station.city:
-                    result_text += f", {station.city}"
                 if station.railway_company:
                     result_text += f"\n   Company: {station.railway_company}"
                 if station.line_name:
@@ -283,16 +281,11 @@ class TransitMCPServer:
                 {
                     "name": s.name,
                     "prefecture": s.prefecture,
-                    "city": s.city,
+                    "prefecture_id": s.prefecture_id,
+                    "station_id": s.station_id,
                     "railway_company": s.railway_company,
                     "line_name": s.line_name,
-                    "station_code": s.station_code,
-                    "location": {"lat": s.latitude, "lng": s.longitude}
-                    if s.latitude and s.longitude
-                    else None,
                     "aliases": s.aliases,
-                    "line_name_kana": s.line_name_kana,
-                    "line_color": s.line_color,
                     "line_type": s.line_type,
                     "company_code": s.company_code,
                     "all_lines": s.all_lines,
@@ -328,8 +321,7 @@ class TransitMCPServer:
             if station.prefecture:
                 result_text += f"• **Prefecture:** {station.prefecture}\n"
 
-            if station.city:
-                result_text += f"• **City:** {station.city}\n"
+
 
             if station.railway_company:
                 result_text += f"• **Company:** {station.railway_company}\n"
@@ -337,27 +329,23 @@ class TransitMCPServer:
             if station.line_name:
                 result_text += f"• **Line:** {station.line_name}\n"
 
-            if station.station_code:
-                result_text += f"• **Code:** {station.station_code}\n"
+            if station.line_type:
+                result_text += f"• **Line Type:** {station.line_type}\n"
 
-            if station.latitude and station.longitude:
-                result_text += (
-                    f"• **Location:** {station.latitude}, {station.longitude}\n"
-                )
+            if station.company_code:
+                result_text += f"• **Company Code:** {station.company_code}\n"
+
+            if station.all_lines:
+                result_text += f"• **All Lines:** {', '.join(station.all_lines)}\n"
 
             station_data = {
                 "name": station.name,
                 "prefecture": station.prefecture,
-                "city": station.city,
+                "prefecture_id": station.prefecture_id,
+                "station_id": station.station_id,
                 "railway_company": station.railway_company,
                 "line_name": station.line_name,
-                "station_code": station.station_code,
-                "location": {"lat": station.latitude, "lng": station.longitude}
-                if station.latitude and station.longitude
-                else None,
                 "aliases": station.aliases,
-                "line_name_kana": station.line_name_kana,
-                "line_color": station.line_color,
                 "line_type": station.line_type,
                 "company_code": station.company_code,
                 "all_lines": station.all_lines,
@@ -414,8 +402,6 @@ class TransitMCPServer:
                 result_text += f"{i}. **{station.name}**"
                 if station.prefecture:
                     result_text += f" - {station.prefecture}"
-                if station.city:
-                    result_text += f", {station.city}"
                 if station.railway_company:
                     result_text += f"\n   Company: {station.railway_company}"
                 if station.line_name:
