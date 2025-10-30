@@ -52,7 +52,7 @@ class TransitMCPServer:
         
         try:
             # Try to load from CSV file first (faster than crawling)
-            csv_file = Path("stations_data.csv")
+            csv_file = Path("data/stations.csv")
             if csv_file.exists():
                 logger.info(f"Loading stations from CSV file: {csv_file}")
                 stations = self.station_crawler.load_from_csv(csv_file)
@@ -186,8 +186,8 @@ class TransitMCPServer:
                         "properties": {
                             "filename": {
                                 "type": "string",
-                                "description": "CSV filename (optional, defaults to 'stations_data.csv')",
-                                "default": "stations_data.csv"
+                                "description": "CSV filename (optional, defaults to 'data/stations.csv')",
+                                "default": "data/stations.csv"
                             }
                         }
                     }
@@ -201,7 +201,7 @@ class TransitMCPServer:
                             "filename": {
                                 "type": "string",
                                 "description": "CSV filename to load",
-                                "default": "stations_data.csv"
+                                "default": "data/stations.csv"
                             }
                         },
                         "required": ["filename"]
@@ -407,7 +407,9 @@ class TransitMCPServer:
             
             # Save the crawled stations to CSV for future use
             from pathlib import Path
-            csv_file = Path("stations_data.csv")
+            csv_file = Path("data/stations.csv")
+            # Ensure data directory exists
+            csv_file.parent.mkdir(exist_ok=True)
             self.station_crawler.save_to_csv(stations, csv_file)
             
             # Update the searcher with new data
@@ -487,7 +489,7 @@ class TransitMCPServer:
     
     async def _save_stations_csv(self, arguments: Dict[str, Any]) -> List[TextContent]:
         """Save current station database to CSV file."""
-        filename = arguments.get("filename", "stations_data.csv")
+        filename = arguments.get("filename", "data/stations.csv")
         
         try:
             from pathlib import Path

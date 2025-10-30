@@ -25,6 +25,7 @@ stations_data.csv
 *.swp
 *.swo
 *~
--e 
-# Data directory for testing
-data/
+
+# Data directory for testing (but allow stations.csv)
+data/*
+!data/stations.csv
