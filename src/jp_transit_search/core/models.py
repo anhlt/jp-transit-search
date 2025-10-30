@@ -10,19 +10,17 @@ class Station(BaseModel):
 
     name: str = Field(..., description="Station name in Japanese")
     prefecture: str | None = Field(None, description="Prefecture name")
-    city: str | None = Field(None, description="City name")
+    prefecture_id: str | None = Field(None, description="JIS X 0401 prefecture code (01-47)")
+    # city field removed - not available from Yahoo Transit data source
+    station_id: str | None = Field(None, description="Yahoo Transit station ID (extractable from URLs)")
     railway_company: str | None = Field(None, description="Railway company")
     line_name: str | None = Field(None, description="Railway line name")
-    station_code: str | None = Field(None, description="Station code")
-    latitude: float | None = Field(None, description="Latitude")
-    longitude: float | None = Field(None, description="Longitude")
+    # latitude, longitude, line_name_kana, line_color, station_code removed - no data available
     aliases: list[str] | None = Field(
         default_factory=list, description="Alternative names"
     )
 
     # Additional line information
-    line_name_kana: str | None = Field(None, description="Line name in kana")
-    line_color: str | None = Field(None, description="Line color code (hex)")
     line_type: str | None = Field(
         None, description="Line type (JR, Metro, Private, etc.)"
     )

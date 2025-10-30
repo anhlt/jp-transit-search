@@ -132,7 +132,6 @@ def format_station_table(stations: list[object], verbose: bool = False) -> str:
     table.add_column("Prefecture", style="green")
 
     if verbose:
-        table.add_column("City", style="yellow")
         table.add_column("Company", style="blue")
         table.add_column("Line", style="red")
 

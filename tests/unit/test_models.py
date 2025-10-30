@@ -20,12 +20,8 @@ class TestStation:
         station = Station(
             name="横浜",
             prefecture="神奈川県",
-            city="横浜市",
             railway_company="JR東日本",
             line_name="東海道本線",
-            station_code="JT05",
-            latitude=35.4658,
-            longitude=139.6220,
             aliases=["ヨコハマ", "yokohama"],
         )
 

@@ -60,9 +60,6 @@ class TestTransitMCPServer:
                 city="Chiyoda",
                 railway_company="JR East",
                 line_name="JR Tokaido Line",
-                station_code="JT01",
-                latitude=35.6812,
-                longitude=139.7671,
                 aliases=["Tokyo Station"],
             ),
             Station(
@@ -71,9 +68,6 @@ class TestTransitMCPServer:
                 city="Shinjuku",
                 railway_company="JR East",
                 line_name="JR Yamanote Line",
-                station_code="JY17",
-                latitude=35.6896,
-                longitude=139.7006,
                 aliases=["Shinjuku Station"],
             ),
         ]

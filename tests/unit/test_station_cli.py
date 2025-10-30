@@ -22,10 +22,10 @@ class TestStationCLICommands:
     @pytest.fixture
     def sample_csv_file(self):
         """Create a temporary CSV file with sample station data."""
-        csv_content = """name,prefecture,city,railway_company,line_name,station_code,latitude,longitude,aliases
-新宿,東京都,新宿区,JR東日本,山手線,JY17,35.689487,139.700531,しんじゅく|Shinjuku
-渋谷,東京都,渋谷区,JR東日本,山手線,JY20,35.658517,139.701334,しぶや|Shibuya
-横浜,神奈川県,横浜市,JR東日本,東海道線,JT05,35.466188,139.622540,よこはま|Yokohama"""
+        csv_content = """name,prefecture,prefecture_id,station_id,railway_company,line_name,aliases,line_type,company_code,all_lines
+新宿,東京都,13,station_shinjuku,JR東日本,山手線,しんじゅく|Shinjuku,JR,JR-E,
+渋谷,東京都,13,station_shibuya,JR東日本,山手線,しぶや|Shibuya,JR,JR-E,
+横浜,神奈川県,14,station_yokohama,JR東日本,東海道線,よこはま|Yokohama,JR,JR-E,"""
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".csv", encoding="utf-8", delete=False
@@ -189,8 +189,8 @@ class TestStationCLICommands:
         )
 
         assert result.exit_code == 0
-        assert "name,prefecture,city" in result.output
-        assert "新宿,東京都,新宿区" in result.output
+        assert "name,prefecture,prefecture_id" in result.output
+        assert "新宿,東京都,13" in result.output
         # Clean up
         sample_csv_file.unlink()
 
@@ -227,7 +227,7 @@ class TestStationCLICommands:
     def test_list_command_no_stations(self, runner):
         """Test station list with empty data."""
         # Create empty CSV file
-        csv_content = "name,prefecture,city,railway_company,line_name,station_code,latitude,longitude,aliases\n"
+        csv_content = "name,prefecture,prefecture_id,station_id,railway_company,line_name,aliases,line_type,company_code,all_lines\n"
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".csv", encoding="utf-8", delete=False
         ) as f:
