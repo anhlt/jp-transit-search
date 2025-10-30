@@ -3,8 +3,10 @@
 import csv
 import json
 import logging
+import time
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 from urllib.parse import quote
 
 import requests
@@ -17,14 +19,59 @@ from ..core.models import Station
 logger = logging.getLogger(__name__)
 
 
+class CrawlingProgress:
+    """Track crawling progress and statistics."""
+    
+    def __init__(self):
+        self.start_time = datetime.now()
+        self.stations_found = 0
+        self.duplicates_filtered = 0
+        self.prefectures_completed = 0
+        self.lines_completed = 0
+        self.current_prefecture = ""
+        self.current_line = ""
+        self.errors = 0
+        self.retries = 0
+        
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert progress to dictionary for serialization."""
+        return {
+            'start_time': self.start_time.isoformat(),
+            'stations_found': self.stations_found,
+            'duplicates_filtered': self.duplicates_filtered,
+            'prefectures_completed': self.prefectures_completed,
+            'lines_completed': self.lines_completed,
+            'current_prefecture': self.current_prefecture,
+            'current_line': self.current_line,
+            'errors': self.errors,
+            'retries': self.retries
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'CrawlingProgress':
+        """Create progress from dictionary."""
+        progress = cls()
+        progress.start_time = datetime.fromisoformat(data.get('start_time', datetime.now().isoformat()))
+        progress.stations_found = data.get('stations_found', 0)
+        progress.duplicates_filtered = data.get('duplicates_filtered', 0)
+        progress.prefectures_completed = data.get('prefectures_completed', 0)
+        progress.lines_completed = data.get('lines_completed', 0)
+        progress.current_prefecture = data.get('current_prefecture', '')
+        progress.current_line = data.get('current_line', '')
+        progress.errors = data.get('errors', 0)
+        progress.retries = data.get('retries', 0)
+        return progress
+
+
 class StationCrawler:
     """Crawler for Japanese train station data."""
     
-    def __init__(self, timeout: int = 30):
+    def __init__(self, timeout: int = 30, progress_callback: Optional[Callable] = None):
         """Initialize the station crawler.
         
         Args:
-            timeout: Request timeout in seconds
+            timeout: Request timeout in seconds  
+            progress_callback: Optional callback for progress updates
         """
         self.timeout = timeout
         self.session = requests.Session()
@@ -32,24 +79,60 @@ class StationCrawler:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
         self.stations: List[Station] = []
+        self.existing_stations: Set[tuple] = set()  # For deduplication
+        self.progress = CrawlingProgress()
+        self.progress_callback = progress_callback
+        self.state_file: Optional[Path] = None
+        self.checkpoint_interval = 50  # Save progress every 50 stations
         
-    def crawl_all_stations(self) -> List[Station]:
-        """Crawl station data from multiple sources.
+    def crawl_all_stations(self, resume_from_csv: Optional[Path] = None, 
+                          state_file: Optional[Path] = None) -> List[Station]:
+        """Crawl station data from multiple sources with resume capability.
+        
+        Args:
+            resume_from_csv: Path to existing CSV file to resume from
+            state_file: Path to state file for tracking progress
         
         Returns:
             List of Station objects
         """
-        logger.info("Starting station data crawl")
+        logger.info("Starting resumable station data crawl")
+        self.state_file = state_file
+        
+        # Load existing stations for deduplication
+        if resume_from_csv and resume_from_csv.exists():
+            self._load_existing_stations(resume_from_csv)
+            logger.info(f"Loaded {len(self.existing_stations)} existing stations for deduplication")
+        
+        # Load previous progress state
+        crawl_state = self._load_crawl_state()
+        
         self.stations = []
+        self._update_progress("Starting crawl...")
         
-        # Add different data sources
-        self._crawl_yahoo_transit_stations()
-        self._crawl_ekitan_stations()
-        
-        # Remove duplicates and return
-        unique_stations = self._deduplicate_stations()
-        logger.info(f"Crawled {len(unique_stations)} unique stations")
-        return unique_stations
+        try:
+            # Crawl Yahoo Transit stations with resume capability
+            self._crawl_yahoo_transit_stations_resumable(crawl_state)
+            
+            # Remove duplicates and return
+            unique_stations = self._deduplicate_stations()
+            
+            # Update final progress
+            self.progress.stations_found = len(unique_stations)
+            self._update_progress("Crawling completed!")
+            
+            # Clean up state file on successful completion
+            if self.state_file and self.state_file.exists():
+                self.state_file.unlink()
+                
+            logger.info(f"Crawled {len(unique_stations)} unique stations")
+            return unique_stations
+            
+        except Exception as e:
+            # Save current state before re-raising
+            self._save_crawl_state(crawl_state)
+            logger.error(f"Crawling interrupted: {e}")
+            raise
     
     def save_to_csv(self, stations: List[Station], file_path: Path) -> None:
         """Save stations to CSV file.
@@ -89,6 +172,49 @@ class StationCrawler:
         
         logger.info(f"Saved {len(stations)} stations to {file_path}")
     
+    def append_to_csv(self, stations: List[Station], file_path: Path) -> None:
+        """Append stations to existing CSV file.
+        
+        Args:
+            stations: List of stations to append
+            file_path: Path to CSV file
+        """
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Check if file exists to determine if we need headers
+        write_headers = not file_path.exists()
+        
+        with open(file_path, 'a', newline='', encoding='utf-8') as csvfile:
+            fieldnames = [
+                'name', 'prefecture', 'city', 'railway_company', 
+                'line_name', 'station_code', 'latitude', 'longitude', 'aliases',
+                'line_name_kana', 'line_color', 'line_type', 'company_code', 'all_lines'
+            ]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            if write_headers:
+                writer.writeheader()
+                
+            for station in stations:
+                writer.writerow({
+                    'name': station.name,
+                    'prefecture': station.prefecture or '',
+                    'city': station.city or '',
+                    'railway_company': station.railway_company or '',
+                    'line_name': station.line_name or '',
+                    'station_code': station.station_code or '',
+                    'latitude': station.latitude or '',
+                    'longitude': station.longitude or '',
+                    'aliases': '|'.join(station.aliases) if station.aliases else '',
+                    'line_name_kana': station.line_name_kana or '',
+                    'line_color': station.line_color or '',
+                    'line_type': station.line_type or '',
+                    'company_code': station.company_code or '',
+                    'all_lines': '|'.join(station.all_lines) if station.all_lines else ''
+                })
+        
+        logger.info(f"Appended {len(stations)} stations to {file_path}")
+    
     def load_from_csv(self, file_path: Path) -> List[Station]:
         """Load stations from CSV file.
         
@@ -127,13 +253,124 @@ class StationCrawler:
         logger.info(f"Loaded {len(stations)} stations from {file_path}")
         return stations
     
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10)
-    )
-    def _crawl_yahoo_transit_stations(self) -> None:
-        """Crawl station data from Yahoo Transit using prefecture-based approach."""
-        logger.info("Crawling Yahoo Transit station data")
+    def _load_existing_stations(self, csv_path: Path) -> None:
+        """Load existing stations for deduplication.
+        
+        Args:
+            csv_path: Path to existing CSV file
+        """
+        try:
+            existing_stations = self.load_from_csv(csv_path)
+            self.existing_stations = {(s.name, s.prefecture) for s in existing_stations}
+        except Exception as e:
+            logger.warning(f"Failed to load existing stations: {e}")
+            self.existing_stations = set()
+    
+    def _save_crawl_state(self, state: Dict[str, Any]) -> None:
+        """Save current crawling state to disk.
+        
+        Args:
+            state: Current crawling state
+        """
+        if not self.state_file:
+            return
+            
+        try:
+            state['progress'] = self.progress.to_dict()
+            state['timestamp'] = datetime.now().isoformat()
+            
+            with open(self.state_file, 'w', encoding='utf-8') as f:
+                json.dump(state, f, indent=2, ensure_ascii=False)
+                
+        except Exception as e:
+            logger.warning(f"Failed to save crawl state: {e}")
+    
+    def _load_crawl_state(self) -> Dict[str, Any]:
+        """Load previous crawling state from disk.
+        
+        Returns:
+            Previous crawling state or empty dict
+        """
+        if not self.state_file or not self.state_file.exists():
+            return {
+                'completed_prefectures': [],
+                'completed_lines': {},
+                'current_prefecture_index': 0,
+                'current_line_index': 0
+            }
+        
+        try:
+            with open(self.state_file, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+                
+            # Restore progress if available
+            if 'progress' in state:
+                self.progress = CrawlingProgress.from_dict(state['progress'])
+                
+            return state
+            
+        except Exception as e:
+            logger.warning(f"Failed to load crawl state: {e}")
+            return {
+                'completed_prefectures': [],
+                'completed_lines': {},
+                'current_prefecture_index': 0,
+                'current_line_index': 0
+            }
+    
+    def _update_progress(self, message: str, increment_stations: int = 0) -> None:
+        """Update progress and notify callback.
+        
+        Args:
+            message: Progress message
+            increment_stations: Number of stations to add to count
+        """
+        if increment_stations > 0:
+            self.progress.stations_found += increment_stations
+            
+        if self.progress_callback:
+            self.progress_callback({
+                'message': message,
+                'stations_found': self.progress.stations_found,
+                'duplicates_filtered': self.progress.duplicates_filtered,
+                'prefectures_completed': self.progress.prefectures_completed,
+                'lines_completed': self.progress.lines_completed,
+                'current_prefecture': self.progress.current_prefecture,
+                'current_line': self.progress.current_line,
+                'errors': self.progress.errors,
+                'elapsed_time': (datetime.now() - self.progress.start_time).total_seconds()
+            })
+    
+    def _checkpoint_save(self, stations_batch: List[Station], output_path: Path) -> None:
+        """Save a batch of stations and update progress.
+        
+        Args:
+            stations_batch: Batch of stations to save
+            output_path: CSV file path to append to
+        """
+        if not stations_batch:
+            return
+            
+        # Filter out duplicates before saving
+        new_stations = []
+        for station in stations_batch:
+            key = (station.name, station.prefecture)
+            if key not in self.existing_stations:
+                new_stations.append(station)
+                self.existing_stations.add(key)
+            else:
+                self.progress.duplicates_filtered += 1
+        
+        if new_stations:
+            self.append_to_csv(new_stations, output_path)
+            self._update_progress(
+                f"Saved {len(new_stations)} new stations (filtered {len(stations_batch) - len(new_stations)} duplicates)",
+                increment_stations=len(new_stations)
+            )
+    
+    def _crawl_yahoo_transit_stations_resumable(self, crawl_state: Dict[str, Any]) -> None:
+        """Crawl station data from Yahoo Transit with resume capability."""
+        logger.info("Crawling Yahoo Transit station data (resumable)")
         
         # Crawl Tokyo prefecture (13) - can expand to other prefectures
         prefectures_to_crawl = [
@@ -143,18 +380,56 @@ class StationCrawler:
             {'code': '12', 'name': '千葉県'},
         ]
         
-        for pref in prefectures_to_crawl:
+        completed_prefectures = set(crawl_state.get('completed_prefectures', []))
+        start_index = crawl_state.get('current_prefecture_index', 0)
+        
+        for i, pref in enumerate(prefectures_to_crawl[start_index:], start_index):
+            pref_key = f"{pref['code']}_{pref['name']}"
+            
+            if pref_key in completed_prefectures:
+                logger.info(f"Skipping already completed prefecture: {pref['name']}")
+                continue
+                
+            self.progress.current_prefecture = pref['name']
+            self._update_progress(f"Starting prefecture: {pref['name']}")
+            
             try:
-                self._crawl_prefecture_stations(pref['code'], pref['name'])
+                self._crawl_prefecture_stations_resumable(
+                    pref['code'], pref['name'], crawl_state
+                )
+                
+                # Mark prefecture as completed
+                completed_prefectures.add(pref_key)
+                crawl_state['completed_prefectures'] = list(completed_prefectures)
+                crawl_state['current_prefecture_index'] = i + 1
+                self.progress.prefectures_completed += 1
+                
+                # Save state after each prefecture
+                self._save_crawl_state(crawl_state)
+                
             except Exception as e:
+                self.progress.errors += 1
+                self._update_progress(f"Failed to crawl {pref['name']}: {e}")
                 logger.warning(f"Failed to crawl {pref['name']} stations: {e}")
+                continue
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10)
+    )
+    def _crawl_yahoo_transit_stations(self) -> None:
+        """Legacy method - use _crawl_yahoo_transit_stations_resumable instead."""
+        crawl_state = {'completed_prefectures': [], 'completed_lines': {}}
+        self._crawl_yahoo_transit_stations_resumable(crawl_state)
     
-    def _crawl_prefecture_stations(self, pref_code: str, pref_name: str) -> None:
-        """Crawl all railway lines in a prefecture.
+    def _crawl_prefecture_stations_resumable(self, pref_code: str, pref_name: str, 
+                                           crawl_state: Dict[str, Any]) -> None:
+        """Crawl all railway lines in a prefecture with resume capability.
         
         Args:
             pref_code: Prefecture code (e.g., '13' for Tokyo)
             pref_name: Prefecture name (e.g., '東京都')
+            crawl_state: Current crawling state
         """
         pref_url = f'https://transit.yahoo.co.jp/station/pref/{pref_code}'
         logger.info(f"Crawling {pref_name} prefecture: {pref_url}")
@@ -178,20 +453,66 @@ class StationCrawler:
             
             logger.info(f"Found {len(line_links)} railway lines in {pref_name}")
             
+            # Get completed lines for this prefecture
+            pref_key = f"{pref_code}_{pref_name}"
+            completed_lines = set(crawl_state.get('completed_lines', {}).get(pref_key, []))
+            
+            stations_batch = []
+            
             # Crawl each line (limit to first 20 lines to avoid overwhelming)
-            for line_name, line_url in line_links[:20]:
+            for i, (line_name, line_url) in enumerate(line_links[:20]):
+                line_key = f"{line_name}_{line_url}"
+                
+                if line_key in completed_lines:
+                    logger.info(f"Skipping already completed line: {line_name}")
+                    continue
+                
+                self.progress.current_line = line_name
+                self._update_progress(f"Crawling line: {line_name}")
+                
                 try:
-                    self._parse_yahoo_line_page(line_url, line_name, pref_name)
+                    line_stations = self._parse_yahoo_line_page_resumable(
+                        line_url, line_name, pref_name
+                    )
+                    stations_batch.extend(line_stations)
+                    
+                    # Mark line as completed
+                    completed_lines.add(line_key)
+                    if pref_key not in crawl_state['completed_lines']:
+                        crawl_state['completed_lines'][pref_key] = []
+                    crawl_state['completed_lines'][pref_key] = list(completed_lines)
+                    self.progress.lines_completed += 1
+                    
+                    # Checkpoint save every batch or when reaching checkpoint interval
+                    if len(stations_batch) >= self.checkpoint_interval:
+                        self._update_progress(f"Checkpoint: saving {len(stations_batch)} stations")
+                        self.stations.extend(stations_batch)
+                        stations_batch = []
+                        self._save_crawl_state(crawl_state)
+                    
                     # Add delay to be respectful
-                    import time
                     time.sleep(1)
+                    
                 except Exception as e:
+                    self.progress.errors += 1
+                    self._update_progress(f"Failed to crawl line {line_name}: {e}")
                     logger.warning(f"Failed to crawl line {line_name}: {e}")
+                    continue
+            
+            # Save any remaining stations
+            if stations_batch:
+                self.stations.extend(stations_batch)
+                self._update_progress(f"Final batch: saved {len(stations_batch)} stations")
                     
         except requests.RequestException as e:
             raise NetworkError(f"Failed to fetch prefecture page: {e}")
         except Exception as e:
             raise ScrapingError(f"Failed to parse prefecture page: {e}")
+    
+    def _crawl_prefecture_stations(self, pref_code: str, pref_name: str) -> None:
+        """Legacy method - use _crawl_prefecture_stations_resumable instead."""
+        crawl_state = {'completed_lines': {}}
+        self._crawl_prefecture_stations_resumable(pref_code, pref_name, crawl_state)
     
     def _parse_yahoo_line_page(self, url: str, line_name: str, prefecture: str = None) -> None:
         """Parse a Yahoo Transit line page to extract stations.
@@ -261,6 +582,93 @@ class StationCrawler:
                 self.stations.append(station)
             
             logger.info(f"Found {len(stations_found)} stations on {line_name}")
+                        
+        except requests.RequestException as e:
+            raise NetworkError(f"Failed to fetch Yahoo Transit page: {e}")
+        except Exception as e:
+            raise ScrapingError(f"Failed to parse Yahoo Transit page: {e}")
+    
+    def _parse_yahoo_line_page_resumable(self, url: str, line_name: str, 
+                                       prefecture: str = None) -> List[Station]:
+        """Parse a Yahoo Transit line page to extract stations (resumable version).
+        
+        Args:
+            url: Yahoo Transit line page URL
+            line_name: Railway line name
+            prefecture: Prefecture name
+        
+        Returns:
+            List of Station objects found on this line
+        """
+        line_stations = []
+        
+        try:
+            response = self.session.get(url, timeout=self.timeout)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Look for station links - Yahoo uses pattern /station/{id}?pref={pref}&company={company}&line={line}
+            station_links = []
+            stations_found = []
+            
+            for link in soup.find_all('a', href=True):
+                href = link.get('href', '')
+                text = link.get_text().strip()
+                
+                # Look for station links with query parameters
+                if '/station/' in href and 'pref=' in href and 'company=' in href and text:
+                    # Filter out non-station links
+                    if text not in ['駅情報', '時刻表'] and len(text) <= 15:
+                        station_links.append((text, href))
+            
+            # Extract detailed station information
+            for station_name, station_href in station_links:
+                if station_name in stations_found:
+                    continue  # Skip duplicates
+                
+                # Check if this station already exists
+                station_key = (station_name, prefecture)
+                if station_key in self.existing_stations:
+                    self.progress.duplicates_filtered += 1
+                    continue
+                
+                stations_found.append(station_name)
+                
+                # Extract additional info from URL parameters
+                station_info = self._extract_station_info_from_url(station_href, url)
+                
+                # Get prefecture from URL or parameter
+                station_prefecture = prefecture or self._get_prefecture_from_url(url)
+                
+                # Determine railway company from line name
+                railway_company = self._get_company_from_line(line_name)
+                
+                # Try to get additional details by visiting station page
+                station_details = self._get_station_details(station_href)
+                
+                # Create station with comprehensive line information
+                station = Station(
+                    name=station_name,
+                    prefecture=station_prefecture,
+                    city=station_details.get('city'),
+                    railway_company=railway_company,
+                    line_name=line_name,
+                    station_code=station_details.get('station_code'),
+                    latitude=station_details.get('latitude'),
+                    longitude=station_details.get('longitude'),
+                    aliases=station_details.get('aliases', []),
+                    line_name_kana=station_details.get('line_name_kana'),
+                    line_color=station_details.get('line_color'),
+                    line_type=self._get_line_type(line_name),
+                    company_code=self._get_company_code(railway_company),
+                    all_lines=station_details.get('all_lines', [])
+                )
+                
+                line_stations.append(station)
+            
+            logger.info(f"Found {len(stations_found)} stations on {line_name}")
+            return line_stations
                         
         except requests.RequestException as e:
             raise NetworkError(f"Failed to fetch Yahoo Transit page: {e}")
@@ -511,30 +919,7 @@ class StationCrawler:
         }
         return company_codes.get(company_name, 'OTHER')
     
-    def _crawl_ekitan_stations(self) -> None:
-        """Crawl station data from Ekitan (sample implementation).
-        
-        Note: This is a placeholder implementation.
-        Real implementation would need to respect robots.txt and rate limits.
-        """
-        logger.info("Crawling Ekitan station data (placeholder)")
-        
-        # Add some sample Tokyo stations for demonstration
-        sample_stations = [
-            Station(name="新宿", prefecture="東京都", city="新宿区", railway_company="JR東日本"),
-            Station(name="渋谷", prefecture="東京都", city="渋谷区", railway_company="JR東日本"),
-            Station(name="池袋", prefecture="東京都", city="豊島区", railway_company="JR東日本"),
-            Station(name="東京", prefecture="東京都", city="千代田区", railway_company="JR東日本"),
-            Station(name="品川", prefecture="東京都", city="港区", railway_company="JR東日本"),
-            Station(name="上野", prefecture="東京都", city="台東区", railway_company="JR東日本"),
-            Station(name="秋葉原", prefecture="東京都", city="千代田区", railway_company="JR東日本"),
-            Station(name="有楽町", prefecture="東京都", city="千代田区", railway_company="JR東日本"),
-            Station(name="新橋", prefecture="東京都", city="港区", railway_company="JR東日本"),
-            Station(name="浜松町", prefecture="東京都", city="港区", railway_company="JR東日本"),
-        ]
-        
-        self.stations.extend(sample_stations)
-        logger.info(f"Added {len(sample_stations)} sample stations")
+
     
     def _deduplicate_stations(self) -> List[Station]:
         """Remove duplicate stations based on name and prefecture.

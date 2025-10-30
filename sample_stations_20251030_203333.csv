@@ -1,0 +1,11 @@
+name,prefecture,city,railway_company,line_name,station_code,latitude,longitude,aliases,line_name_kana,line_color,line_type,company_code,all_lines
+新宿,東京都,新宿区,JR東日本,,,,,,,,,,
+渋谷,東京都,渋谷区,JR東日本,,,,,,,,,,
+池袋,東京都,豊島区,JR東日本,,,,,,,,,,
+東京,東京都,千代田区,JR東日本,,,,,,,,,,
+品川,東京都,港区,JR東日本,,,,,,,,,,
+上野,東京都,台東区,JR東日本,,,,,,,,,,
+秋葉原,東京都,千代田区,JR東日本,,,,,,,,,,
+有楽町,東京都,千代田区,JR東日本,,,,,,,,,,
+新橋,東京都,港区,JR東日本,,,,,,,,,,
+浜松町,東京都,港区,JR東日本,,,,,,,,,,

@@ -5,7 +5,7 @@ from typing import Optional
 
 import click
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn, MofNCompleteColumn
 from rich.table import Table
 
 from ..crawler import StationCrawler, StationSearcher
@@ -23,36 +23,140 @@ def stations():
 @click.option("--output", "-o", type=click.Path(), default="data/stations.csv", 
               help="Output CSV file path")
 @click.option("--timeout", "-t", default=30, help="Request timeout in seconds")
-def crawl_stations(output: str, timeout: int):
-    """Crawl station data from various sources and save to CSV.
+@click.option("--resume", "-r", is_flag=True, 
+              help="Resume from existing CSV and state file")
+@click.option("--state-file", "-s", type=click.Path(), default="data/crawl_state.json",
+              help="State file for tracking progress")
+def crawl_stations(output: str, timeout: int, resume: bool, state_file: str):
+    """Crawl station data from Yahoo Transit with resumable functionality.
+    
+    The crawler shows detailed progress including:
+    - Number of stations found and processed
+    - Current prefecture and railway line being crawled  
+    - Duplicate detection and filtering
+    - Automatic checkpointing every 50 stations
+    
+    Use --resume to continue from a previous interrupted crawl.
     
     Examples:
         jp-transit stations crawl
         jp-transit stations crawl --output my_stations.csv
+        jp-transit stations crawl --resume --timeout 60
     """
     output_path = Path(output)
+    state_path = Path(state_file)
+    
+    # Ensure output directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Progress tracking variables
+    progress_data = {
+        'stations_found': 0,
+        'duplicates_filtered': 0,
+        'prefectures_completed': 0,
+        'lines_completed': 0,
+        'current_prefecture': '',
+        'current_line': '',
+        'errors': 0,
+        'elapsed_time': 0
+    }
+    
+    def update_progress_display(data):
+        """Update progress display with current crawling status."""
+        nonlocal progress_data
+        progress_data.update(data)
+        
+        # Format elapsed time
+        elapsed_min = int(data['elapsed_time'] // 60)
+        elapsed_sec = int(data['elapsed_time'] % 60)
+        time_str = f"{elapsed_min:02d}:{elapsed_sec:02d}"
+        
+        # Create detailed status message
+        status_parts = []
+        if data['current_prefecture']:
+            status_parts.append(f"Prefecture: {data['current_prefecture']}")
+        if data['current_line']:
+            status_parts.append(f"Line: {data['current_line']}")
+        if data['stations_found'] > 0:
+            status_parts.append(f"Stations: {data['stations_found']}")
+        if data['duplicates_filtered'] > 0:
+            status_parts.append(f"Filtered: {data['duplicates_filtered']}")
+        
+        status = " | ".join(status_parts) if status_parts else data['message']
+        
+        # Update progress displays
+        overall_progress.update(overall_task, description=f"[cyan]{status}[/cyan]")
+        stats_progress.update(stats_task, 
+            description=f"[green]Found: {data['stations_found']}[/green] | "
+                       f"[yellow]Duplicates: {data['duplicates_filtered']}[/yellow] | "
+                       f"[blue]Time: {time_str}[/blue] | "
+                       f"[red]Errors: {data['errors']}[/red]")
+    
+    # Setup Rich progress display
     
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         console=console,
-    ) as progress:
-        task = progress.add_task("Crawling station data...", total=None)
+        expand=True
+    ) as overall_progress, Progress(
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+        expand=True  
+    ) as stats_progress:
+        
+        overall_task = overall_progress.add_task("Initializing crawler...", total=None)
+        stats_task = stats_progress.add_task("", total=None)
         
         try:
-            crawler = StationCrawler(timeout=timeout)
-            stations = crawler.crawl_all_stations()
+            # Initialize crawler with progress callback
+            crawler = StationCrawler(timeout=timeout, progress_callback=update_progress_display)
             
-            progress.update(task, description="Saving to CSV...")
-            crawler.save_to_csv(stations, output_path)
+            # Determine resume parameters
+            resume_csv = output_path if (resume and output_path.exists()) else None
+            resume_state = state_path if resume else None
             
-            progress.update(task, description="Complete!", completed=True)
+            if resume and resume_csv:
+                console.print(f"[yellow]Resuming crawl from:[/yellow] {resume_csv}")
+                console.print(f"[yellow]State file:[/yellow] {resume_state}")
+            
+            overall_progress.update(overall_task, description="Starting crawl...")
+            
+            # Start crawling with resume capability
+            stations = crawler.crawl_all_stations(
+                resume_from_csv=resume_csv,
+                state_file=resume_state
+            )
+            
+            overall_progress.update(overall_task, description="Saving final results...")
+            
+            # Save final results (if not using incremental saves)
+            if not resume or not output_path.exists():
+                crawler.save_to_csv(stations, output_path)
+            
+            overall_progress.update(overall_task, description="[green]Crawl completed![/green]")
+            
+        except KeyboardInterrupt:
+            overall_progress.update(overall_task, description="[yellow]Crawl interrupted by user[/yellow]")
+            console.print(f"\n[yellow]Crawl interrupted! Progress saved to:[/yellow] {state_path}")
+            console.print(f"[yellow]Resume with:[/yellow] jp-transit stations crawl --resume")
+            return
             
         except Exception as e:
+            overall_progress.update(overall_task, description="[red]Crawl failed[/red]")
             console.print(f"[red]Error crawling stations:[/red] {e}")
+            console.print(f"[yellow]Partial progress may be saved to:[/yellow] {output_path}")
             return
     
-    console.print(f"[green]Successfully crawled {len(stations)} stations to {output_path}[/green]")
+    # Final summary
+    console.print(f"\n[green]✓ Successfully crawled {progress_data['stations_found']} stations[/green]")
+    console.print(f"[green]✓ Filtered {progress_data['duplicates_filtered']} duplicates[/green]")
+    console.print(f"[green]✓ Processed {progress_data['prefectures_completed']} prefectures, {progress_data['lines_completed']} lines[/green]")
+    console.print(f"[green]✓ Results saved to:[/green] {output_path}")
+    
+    if progress_data['errors'] > 0:
+        console.print(f"[yellow]⚠ {progress_data['errors']} errors encountered during crawling[/yellow]")
 
 
 @stations.command("search")
