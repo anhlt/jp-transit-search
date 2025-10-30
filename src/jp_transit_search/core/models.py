@@ -100,15 +100,6 @@ class RouteSearchRequest(BaseModel):
         """Convert to Yahoo Transit search URL."""
         base_url = "https://transit.yahoo.co.jp/search/result"
 
-        # Map search_type to Yahoo's s parameter
-        search_type_map = {
-            "earliest": "0",  # 早到着時刻順 (fastest arrival)
-            "cheapest": "1",  # 安料金の安い順 (cheapest)
-            "easiest": "2",  # 楽乗換回数順 (easiest transfers)
-        }
-
-
-
         # Build base parameters
         params = f"?from={self.from_station}&to={self.to_station}&type=1&ticket=ic&expkind=2&userpass=1&ws=3&s=0&al=1&shin=1&ex=1&hb=1&lb=1&sr=1"
 

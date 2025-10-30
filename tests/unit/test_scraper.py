@@ -213,15 +213,20 @@ class TestYahooTransitScraper:
     def test_parse_route_page_ofuna_shibuya_multi_routes(self):
         """Test route parsing for 大船→渋谷 with 3 routes fixture."""
         from pathlib import Path
-        
+
         # Load the actual HTML sample for 大船→渋谷 search results
-        html_path = Path(__file__).parent.parent / "fixtures" / "search_results" / "search_大船渋谷.html"
-        
+        html_path = (
+            Path(__file__).parent.parent
+            / "fixtures"
+            / "search_results"
+            / "search_大船渋谷.html"
+        )
+
         with open(html_path, encoding="utf-8") as f:
             html_content = f.read()
 
         scraper = YahooTransitScraper()
-        
+
         # Create mock request object
         mock_request = type(
             "MockRequest", (), {"from_station": "大船", "to_station": "渋谷"}
@@ -229,29 +234,29 @@ class TestYahooTransitScraper:
 
         # Parse the route page
         routes = scraper._parse_route_page(html_content, mock_request)
-        
+
         # Should extract exactly 3 routes
         assert len(routes) == 3
-        
+
         # Verify route data matches fixture content
         route1, route2, route3 = routes
-        
+
         from datetime import time
-        
+
         # Route 1: 05:09→06:17 (1h8m, 2 transfers, 627円)
         assert route1.departure_time == time(5, 9)
         assert route1.arrival_time == time(6, 17)
         assert route1.duration == "05:09発→06:17着1時間8分（乗車52分）"
         assert route1.transfer_count == 2
         assert route1.cost == "IC優先：627円"
-        
+
         # Route 2: 05:04→06:17 (1h13m, 2 transfers, 627円)
         assert route2.departure_time == time(5, 4)
         assert route2.arrival_time == time(6, 17)
         assert route2.duration == "05:04発→06:17着1時間13分（乗車54分）"
         assert route2.transfer_count == 2
         assert route2.cost == "IC優先：627円"
-        
+
         # Route 3: 05:09→06:18 (1h9m, 1 transfer, 627円)
         assert route3.departure_time == time(5, 9)
         assert route3.arrival_time == time(6, 18)
@@ -261,52 +266,59 @@ class TestYahooTransitScraper:
 
     def test_parse_route_page_ofuna_shinjuku_with_time(self):
         """Test route parsing for 大船→新宿 with specific start time."""
-        from pathlib import Path
         from datetime import datetime
-        
+        from pathlib import Path
+
         # Load the actual HTML sample for 大船→新宿 search results
-        html_path = Path(__file__).parent.parent / "fixtures" / "search_results" / "search_大船新宿.html"
-        
+        html_path = (
+            Path(__file__).parent.parent
+            / "fixtures"
+            / "search_results"
+            / "search_大船新宿.html"
+        )
+
         with open(html_path, encoding="utf-8") as f:
             html_content = f.read()
 
         scraper = YahooTransitScraper()
-        
+
         # Create mock request object with specific time
         mock_request = type(
-            "MockRequest", (), {
-                "from_station": "大船", 
+            "MockRequest",
+            (),
+            {
+                "from_station": "大船",
                 "to_station": "新宿",
                 "search_datetime": datetime(2025, 10, 31, 16, 31),
-                "search_type": "earliest"
-            }
+                "search_type": "earliest",
+            },
         )()
 
         # Parse the route page
         routes = scraper._parse_route_page(html_content, mock_request)
-        
+
         # Should extract exactly 3 routes
         assert len(routes) == 3
-        
+
         # Verify route data matches fixture content
         route1, route2, route3 = routes
-        
+
         from datetime import time
-        
+
         # Route 1: 16:34→17:22 (48m, 0 transfers, 945円)
         assert route1.departure_time == time(16, 34)
         assert route1.arrival_time == time(17, 22)
         assert route1.duration == "16:34発→17:22着48分（乗車48分）"
         assert route1.transfer_count == 0
         assert route1.cost == "IC優先：945円"
-        
+
         # Route 2: 16:47→17:39 (52m, 0 transfers, 945円)
         assert route2.departure_time == time(16, 47)
         assert route2.arrival_time == time(17, 39)
         assert route2.duration == "16:47発→17:39着52分（乗車52分）"
         assert route2.transfer_count == 0
         assert route2.cost == "IC優先：945円"
-        
+
         # Route 3: 16:51→17:46 (55m, 2 transfers, 945円)
         assert route3.departure_time == time(16, 51)
         assert route3.arrival_time == time(17, 46)
@@ -317,109 +329,115 @@ class TestYahooTransitScraper:
     def test_search_route_with_datetime(self):
         """Test search_route method with datetime parameter."""
         from datetime import datetime
+
         from jp_transit_search.core.models import RouteSearchRequest
-        
+
         # Test URL generation with datetime
         search_dt = datetime(2025, 10, 31, 16, 31)
         request = RouteSearchRequest(
             from_station="大船",
-            to_station="新宿", 
+            to_station="新宿",
             search_datetime=search_dt,
-            search_type="earliest"
+            search_type="earliest",
         )
-        
+
         url = request.to_yahoo_url()
         expected_params = [
             "from=大船",
-            "to=新宿", 
+            "to=新宿",
             "y=2025",
             "m=10",
             "d=31",
             "hh=16",
             "m1=3",
-            "m2=1"
+            "m2=1",
         ]
-        
+
         for param in expected_params:
             assert param in url
 
     def test_search_route_different_search_types(self):
         """Test search_route with different search types."""
         from datetime import datetime
+
         from jp_transit_search.core.models import RouteSearchRequest
-        
+
         # Test different search types
         search_dt = datetime(2025, 10, 31, 16, 31)
-        
+
         # Test earliest
         request1 = RouteSearchRequest(
             from_station="大船",
             to_station="新宿",
             search_datetime=search_dt,
-            search_type="earliest"
+            search_type="earliest",
         )
         assert "s=0" in request1.to_yahoo_url()
-        
+
         # Test cheapest
         request2 = RouteSearchRequest(
             from_station="大船",
             to_station="新宿",
             search_datetime=search_dt,
-            search_type="cheapest"
+            search_type="cheapest",
         )
         assert "s=1" in request2.to_yahoo_url()
-        
+
         # Test easiest
         request3 = RouteSearchRequest(
             from_station="大船",
             to_station="新宿",
             search_datetime=search_dt,
-            search_type="easiest"
+            search_type="easiest",
         )
         assert "s=2" in request3.to_yahoo_url()
 
     def test_parse_route_page_ofuna_haneda_with_time(self):
         """Test parsing 大船→羽田空港 route with specific departure time."""
         from datetime import datetime, time
-        
-        with open("tests/fixtures/search_results/search_大船羽田空港.html", "r", encoding="utf-8") as f:
+
+        with open(
+            "tests/fixtures/search_results/search_大船羽田空港.html", encoding="utf-8"
+        ) as f:
             html_content = f.read()
 
         scraper = YahooTransitScraper()
-        
+
         # Create mock request object with specific time
         mock_request = type(
-            "MockRequest", (), {
-                "from_station": "大船", 
+            "MockRequest",
+            (),
+            {
+                "from_station": "大船",
                 "to_station": "羽田空港(東京)",
                 "search_datetime": datetime(2025, 10, 31, 16, 31),
-                "search_type": "earliest"
-            }
+                "search_type": "earliest",
+            },
         )()
 
         # Parse the route page
         routes = scraper._parse_route_page(html_content, mock_request)
-        
+
         # Should extract exactly 3 routes
         assert len(routes) == 3
-        
+
         # Verify route data matches expected values
         route1, route2, route3 = routes
-        
+
         # Route 1: 16:36→17:34 58分 715円 乗換：1回
         assert route1.departure_time == time(16, 36)
         assert route1.arrival_time == time(17, 34)
         assert route1.duration == "16:36発→17:34着58分（乗車45分）"
         assert route1.transfer_count == 1
         assert route1.cost == "IC優先：715円"
-        
+
         # Route 2: 16:34→17:34 1時間0分 715円 乗換：1回
         assert route2.departure_time == time(16, 34)
         assert route2.arrival_time == time(17, 34)
         assert route2.duration == "16:34発→17:34着1時間0分（乗車43分）"
         assert route2.transfer_count == 1
         assert route2.cost == "IC優先：715円"
-        
+
         # Route 3: 16:37→17:37 1時間0分 968円 乗換：1回
         assert route3.departure_time == time(16, 37)
         assert route3.arrival_time == time(17, 37)
