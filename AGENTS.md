@@ -1,10 +1,10 @@
 # Agent Development Guide
 
 ## Commands
-- **Tests**: `pytest` (all), `pytest tests/unit/test_models.py::test_station_creation` (single test)
-- **Lint**: `ruff check src/` (linting), `ruff format src/` (formatting) 
-- **Type check**: `mypy src/jp_transit_search/`
-- **Coverage**: `pytest --cov=jp_transit_search --cov-report=html`
+- **Tests**: `uv run pytest` (all), `uv run pytest tests/unit/test_models.py::test_station_creation` (single test)
+- **Lint**: `uv run ruff check src/` (linting), `uv run ruff format src/` (formatting) 
+- **Type check**: `uv run mypy src/jp_transit_search/`
+- **Coverage**: `uv run pytest --cov=jp_transit_search --cov-report=html`
 - **Install deps**: `uv sync` (development), `uv sync --no-dev` (production only)
 
 ## Code Style

@@ -45,10 +45,12 @@ class Transfer(BaseModel):
     line_name: str = Field(..., description="Railway line name")
     duration_minutes: int = Field(..., description="Travel time in minutes")
     cost_yen: int = Field(..., description="Cost in Japanese yen")
-    departure_time: str | None = Field(
-        None, description="Departure time as string (HH:MM)"
+    departure_time: time | str | None = Field(
+        None, description="Departure time as time or string (HH:MM)"
     )
-    arrival_time: str | None = Field(None, description="Arrival time as string (HH:MM)")
+    arrival_time: time | str | None = Field(
+        None, description="Arrival time as time or string (HH:MM)"
+    )
     departure_platform: str | None = Field(
         None, description="Departure platform number"
     )
@@ -93,25 +95,30 @@ class RouteSearchRequest(BaseModel):
     to_station: str = Field(..., description="Destination station name")
     search_datetime: datetime | None = Field(None, description="Search date and time")
     search_type: str = Field(
-        "earliest", description="Search type: earliest, cheapest, least_transfers"
+        "earliest", description="Search type: earliest, cheapest, easiest, latest"
     )
-
+ 
     def to_yahoo_url(self) -> str:
         """Convert to Yahoo Transit search URL."""
         base_url = "https://transit.yahoo.co.jp/search/result"
-
+ 
         # Map search_type to Yahoo's s parameter
         search_type_map = {
             "earliest": "0",  # 早到着時刻順 (fastest arrival)
-            "cheapest": "1",  # 安料金の安い順 (cheapest)
-            "easiest": "2",  # 楽乗換回数順 (easiest transfers)
+            "cheapest": "1",  # 料金の安い順 (cheapest)
+            "easiest": "2",  # 乗換回数順 (least transfers / easiest)
+            "latest": "0",    # Treat 'latest' as default for now
         }
-
-
-
+ 
+        s_value = search_type_map.get(self.search_type, "0")
+ 
         # Build base parameters
-        params = f"?from={self.from_station}&to={self.to_station}&type=1&ticket=ic&expkind=2&userpass=1&ws=3&s=0&al=1&shin=1&ex=1&hb=1&lb=1&sr=1"
-
+        params = (
+            f"?from={self.from_station}&to={self.to_station}"
+            f"&type=1&ticket=ic&expkind=2&userpass=1&ws=3&s={s_value}"
+            f"&al=1&shin=1&ex=1&hb=1&lb=1&sr=1"
+        )
+ 
         # Add date/time parameters if search_datetime is provided
         if self.search_datetime:
             year = self.search_datetime.year
@@ -119,11 +126,12 @@ class RouteSearchRequest(BaseModel):
             day = self.search_datetime.day
             hour = self.search_datetime.hour
             minute = self.search_datetime.minute
-
+ 
             # Yahoo uses m1 and m2 for minutes (tens and ones place)
             m1 = minute // 10
             m2 = minute % 10
-
+ 
             params += f"&y={year}&m={month}&d={day}&hh={hour}&m1={m1}&m2={m2}"
-
+ 
         return base_url + params
+

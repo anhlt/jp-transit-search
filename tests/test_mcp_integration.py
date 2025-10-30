@@ -165,7 +165,8 @@ class TestMCPIntegration:
 
         # Verify text content
         text_content = result[0]
-        assert "Route from 東京駅 to 大阪駅" in text_content.text
+        # The MCP server now returns a unified list summary for routes
+        assert "Found 1 routes" in text_content.text
         assert "2時間30分" in text_content.text
         assert "¥13,320" in text_content.text
         assert "JR東海道新幹線" in text_content.text

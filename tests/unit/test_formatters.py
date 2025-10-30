@@ -1,6 +1,10 @@
 """Unit tests for CLI formatters."""
 
 import json
+from io import StringIO
+from unittest.mock import patch
+
+from rich.console import Console
 
 from jp_transit_search.cli.formatters import (
     format_route_detailed,
@@ -53,7 +57,10 @@ class TestFormatters:
 
     def test_format_route_table_basic(self):
         """Test basic table formatting."""
-        output = format_route_table(self.sample_route, verbose=False)
+        console = Console(file=StringIO())
+        with patch('jp_transit_search.cli.formatters.console', console):
+            format_route_table(self.sample_route, verbose=False)
+            output = console.file.getvalue()
 
         assert "横浜 → 豊洲" in output
         assert "49分(乗車33分)" in output
@@ -62,7 +69,10 @@ class TestFormatters:
 
     def test_format_route_table_verbose(self):
         """Test verbose table formatting."""
-        output = format_route_table(self.sample_route, verbose=True)
+        console = Console(file=StringIO())
+        with patch('jp_transit_search.cli.formatters.console', console):
+            format_route_table(self.sample_route, verbose=True)
+            output = console.file.getvalue()
 
         assert "横浜 → 豊洲" in output
         assert "Transfer Details" in output
@@ -73,7 +83,10 @@ class TestFormatters:
 
     def test_format_route_table_no_transfers(self):
         """Test table formatting with no transfers."""
-        output = format_route_table(self.route_no_transfers, verbose=False)
+        console = Console(file=StringIO())
+        with patch('jp_transit_search.cli.formatters.console', console):
+            format_route_table(self.route_no_transfers, verbose=False)
+            output = console.file.getvalue()
 
         assert "東京 → 新宿" in output
         assert "15分" in output
@@ -82,14 +95,20 @@ class TestFormatters:
 
     def test_format_route_table_no_transfers_verbose(self):
         """Test verbose table formatting with no transfers."""
-        output = format_route_table(self.route_no_transfers, verbose=True)
+        console = Console(file=StringIO())
+        with patch('jp_transit_search.cli.formatters.console', console):
+            format_route_table(self.route_no_transfers, verbose=True)
+            output = console.file.getvalue()
 
         assert "東京 → 新宿" in output
         assert "No transfer details available" in output
 
     def test_format_route_detailed(self):
         """Test detailed route formatting."""
-        output = format_route_detailed(self.sample_route)
+        console = Console(file=StringIO())
+        with patch('jp_transit_search.cli.formatters.console', console):
+            format_route_detailed(self.sample_route)
+            output = console.file.getvalue()
 
         assert "Route Summary" in output
         assert "From: 横浜" in output
@@ -105,7 +124,10 @@ class TestFormatters:
 
     def test_format_route_detailed_no_transfers(self):
         """Test detailed formatting with no transfers."""
-        output = format_route_detailed(self.route_no_transfers)
+        console = Console(file=StringIO())
+        with patch('jp_transit_search.cli.formatters.console', console):
+            format_route_detailed(self.route_no_transfers)
+            output = console.file.getvalue()
 
         assert "Route Summary" in output
         assert "From: 東京" in output
@@ -120,18 +142,21 @@ class TestFormatters:
         """Test JSON route formatting."""
         output = format_route_json(self.sample_route)
 
-        # Parse JSON to verify structure
+        # Parse JSON to verify structure - returns a list
         data = json.loads(output)
-
-        assert data["from_station"] == "横浜"
-        assert data["to_station"] == "豊洲"
-        assert data["duration"] == "49分(乗車33分)"
-        assert data["cost"] == "IC優先：628円"
-        assert data["transfer_count"] == 2
-        assert len(data["transfers"]) == 2
+        assert isinstance(data, list)
+        assert len(data) == 1
+        
+        route = data[0]
+        assert route["from_station"] == "横浜"
+        assert route["to_station"] == "豊洲"
+        assert route["duration"] == "49分(乗車33分)"
+        assert route["cost"] == "IC優先：628円"
+        assert route["transfer_count"] == 2
+        assert len(route["transfers"]) == 2
 
         # Check first transfer
-        transfer1 = data["transfers"][0]
+        transfer1 = route["transfers"][0]
         assert transfer1["from_station"] == "横浜"
         assert transfer1["to_station"] == "新橋"
         assert transfer1["line_name"] == "東海道本線"
@@ -139,7 +164,7 @@ class TestFormatters:
         assert transfer1["cost_yen"] == 290
 
         # Check second transfer
-        transfer2 = data["transfers"][1]
+        transfer2 = route["transfers"][1]
         assert transfer2["from_station"] == "新橋"
         assert transfer2["to_station"] == "豊洲"
         assert transfer2["line_name"] == "ゆりかもめ"
@@ -150,15 +175,18 @@ class TestFormatters:
         """Test JSON formatting with no transfers."""
         output = format_route_json(self.route_no_transfers)
 
-        # Parse JSON to verify structure
+        # Parse JSON to verify structure - returns a list
         data = json.loads(output)
-
-        assert data["from_station"] == "東京"
-        assert data["to_station"] == "新宿"
-        assert data["duration"] == "15分"
-        assert data["cost"] == "160円"
-        assert data["transfer_count"] == 0
-        assert len(data["transfers"]) == 0
+        assert isinstance(data, list)
+        assert len(data) == 1
+        
+        route = data[0]
+        assert route["from_station"] == "東京"
+        assert route["to_station"] == "新宿"
+        assert route["duration"] == "15分"
+        assert route["cost"] == "160円"
+        assert route["transfer_count"] == 0
+        assert len(route["transfers"]) == 0
 
     def test_format_route_json_unicode_handling(self):
         """Test JSON formatting handles Unicode correctly."""
@@ -172,12 +200,15 @@ class TestFormatters:
 
         # Should be valid JSON
         data = json.loads(output)
-        assert isinstance(data, dict)
+        assert isinstance(data, list)
+        assert len(data) == 1
 
     def test_format_station_table_basic(self):
         """Test basic station table formatting."""
-        # This is a placeholder function in the current implementation
-        output = format_station_table([], verbose=False)
+        console = Console(file=StringIO())
+        with patch('jp_transit_search.cli.formatters.console', console):
+            format_station_table([], verbose=False)
+            output = console.file.getvalue()
 
         assert "Stations" in output
         assert "Name" in output
@@ -185,11 +216,13 @@ class TestFormatters:
 
     def test_format_station_table_verbose(self):
         """Test verbose station table formatting."""
-        # This is a placeholder function in the current implementation
-        output = format_station_table([], verbose=True)
+        console = Console(file=StringIO())
+        with patch('jp_transit_search.cli.formatters.console', console):
+            format_station_table([], verbose=True)
+            output = console.file.getvalue()
 
         assert "Stations" in output
         assert "Name" in output
         assert "Prefecture" in output
         # Verbose mode should add more columns
-        assert "City" in output or "Company" in output or "Line" in output
+        assert "Company" in output or "Line" in output

@@ -15,6 +15,7 @@ from mcp.types import (
     TextContent,
     Tool,
 )
+from ..core.models import Route
 
 from ..core.exceptions import (
     NetworkError,
@@ -192,34 +193,67 @@ class TransitMCPServer:
 
         try:
             routes = self.scraper.search_route(from_station, to_station)
-            if not routes:
+
+            # Allow scraper to return either a single Route or a list of Route
+            if isinstance(routes, Route):
+                route = routes
+            elif isinstance(routes, (list, tuple)):
+                if not routes:
+                    return [TextContent(type="text", text="No routes found")]
+                route = routes[0]
+            else:
+                # Unknown return type from scraper
+                return [
+                    TextContent(
+                        type="text",
+                        text=(
+                            "Route search returned an unexpected type. "
+                            "Expected Route or list[Route]."
+                        ),
+                    )
+                ]
+
+            # Normalize to a list of routes for unified handling
+            if isinstance(routes, Route):
+                routes_list = [routes]
+            else:
+                routes_list = list(routes)
+
+            if not routes_list:
                 return [TextContent(type="text", text="No routes found")]
 
-            route = routes[0]  # Return the first route
+            # Build a human-readable summary for all found routes
+            result_text = f"**Found {len(routes_list)} routes from {from_station} to {to_station}:**\n\n"
 
-            result_text = f"""
-**Route from {route.from_station} to {route.to_station}**
+            for idx, r in enumerate(routes_list, 1):
+                result_text += f"{idx}. **Route {idx}: {r.from_station} → {r.to_station}**\n"
+                result_text += f"   • Duration: {r.duration}\n"
+                result_text += f"   • Cost: {r.cost}\n"
+                result_text += f"   • Transfers: {r.transfer_count}\n"
+                result_text += f"   • Departure: {r.departure_time or 'N/A'}\n"
+                result_text += f"   • Arrival: {r.arrival_time or 'N/A'}\n"
 
-• **Duration:** {route.duration}
-• **Cost:** {route.cost}
-• **Transfers:** {route.transfer_count}
-• **Departure:** {route.departure_time or "N/A"}
-• **Arrival:** {route.arrival_time or "N/A"}
+                # Add per-route transfer details
+                if r.transfers:
+                    result_text += f"   Route Details:\n"
+                    for t_i, transfer in enumerate(r.transfers, 1):
+                        result_text += f"     {t_i}. {transfer.from_station} → {transfer.to_station}"
+                        if transfer.line_name:
+                            result_text += f" ({transfer.line_name})"
+                        result_text += f" - {transfer.duration_minutes}min - ¥{transfer.cost_yen}\n"
+                result_text += "\n"
 
-**Route Details:**
-"""
-
-            for i, transfer in enumerate(route.transfers, 1):
-                result_text += f"\n{i}. {transfer.from_station} → {transfer.to_station}"
-                if transfer.line_name:
-                    result_text += f" ({transfer.line_name})"
-                result_text += (
-                    f" - {transfer.duration_minutes}min - ¥{transfer.cost_yen}"
-                )
+            # JSON representation as a list
+            routes_data = [r.model_dump(mode="json") for r in routes_list]
 
             return [
                 TextContent(type="text", text=result_text),
+                TextContent(
+                    type="text",
+                    text=f"JSON Data:\n```json\n{json.dumps(routes_data, indent=2, ensure_ascii=False)}\n```",
+                ),
             ]
+
 
         except (ValidationError, RouteNotFoundError, ScrapingError, NetworkError) as e:
             return [TextContent(type="text", text=f"Route search failed: {str(e)}")]
