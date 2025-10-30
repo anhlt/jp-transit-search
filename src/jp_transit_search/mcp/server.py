@@ -191,32 +191,11 @@ class TransitMCPServer:
         to_station = arguments["to_station"]
 
         try:
-            route = self.scraper.search_route(from_station, to_station)
+            routes = self.scraper.search_route(from_station, to_station)
+            if not routes:
+                return [TextContent(type="text", text="No routes found")]
 
-            # Format the route information
-            route_info = {
-                "from_station": route.from_station,
-                "to_station": route.to_station,
-                "duration": route.duration,
-                "cost": route.cost,
-                "transfer_count": route.transfer_count,
-                "departure_time": route.departure_time.isoformat()
-                if route.departure_time
-                else None,
-                "arrival_time": route.arrival_time.isoformat()
-                if route.arrival_time
-                else None,
-                "transfers": [
-                    {
-                        "from_station": t.from_station,
-                        "to_station": t.to_station,
-                        "line_name": t.line_name,
-                        "duration_minutes": t.duration_minutes,
-                        "cost_yen": t.cost_yen,
-                    }
-                    for t in route.transfers
-                ],
-            }
+            route = routes[0]  # Return the first route
 
             result_text = f"""
 **Route from {route.from_station} to {route.to_station}**
@@ -240,10 +219,6 @@ class TransitMCPServer:
 
             return [
                 TextContent(type="text", text=result_text),
-                TextContent(
-                    type="text",
-                    text=f"\nJSON Data:\n```json\n{json.dumps(route_info, indent=2, ensure_ascii=False)}\n```",
-                ),
             ]
 
         except (ValidationError, RouteNotFoundError, ScrapingError, NetworkError) as e:
@@ -320,8 +295,6 @@ class TransitMCPServer:
 
             if station.prefecture:
                 result_text += f"• **Prefecture:** {station.prefecture}\n"
-
-
 
             if station.railway_company:
                 result_text += f"• **Company:** {station.railway_company}\n"
