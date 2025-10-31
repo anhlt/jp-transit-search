@@ -241,7 +241,31 @@ class TransitMCPServer:
                         result_text += f"     {t_i}. {transfer.from_station} → {transfer.to_station}"
                         if transfer.line_name:
                             result_text += f" ({transfer.line_name})"
-                        result_text += f" - {transfer.duration_minutes}min - ¥{transfer.cost_yen}\n"
+                        result_text += f" - {transfer.duration_minutes}min - ¥{transfer.cost_yen}"
+
+                        # Add platform information if available
+                        if transfer.departure_platform or transfer.arrival_platform:
+                            platform_info = []
+                            if transfer.departure_platform:
+                                platform_info.append(f"From: {transfer.departure_platform}")
+                            if transfer.arrival_platform:
+                                platform_info.append(f"To: {transfer.arrival_platform}")
+                            result_text += f" | Platform: {' | '.join(platform_info)}"
+
+                        # Add riding position if available
+                        if transfer.riding_position:
+                            result_text += f" | Position: {transfer.riding_position}"
+
+                        result_text += "\n"
+
+                        # Add intermediate stations if available
+                        if transfer.intermediate_stations:
+                            result_text += "        Intermediate stations: "
+                            station_names = [
+                                f"{station.name} ({station.arrival_time})"
+                                for station in transfer.intermediate_stations
+                            ]
+                            result_text += " → ".join(station_names) + "\n"
                 result_text += "\n"
 
             # JSON representation as a list

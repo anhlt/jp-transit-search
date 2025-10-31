@@ -37,6 +37,16 @@ class Station(BaseModel):
         return self.name
 
 
+class IntermediateStation(BaseModel):
+    """Represents an intermediate station along a route segment."""
+
+    name: str = Field(..., description="Station name")
+    arrival_time: str | None = Field(None, description="Arrival time at this station")
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Transfer(BaseModel):
     """Represents a single transfer/segment of a route."""
 
@@ -55,6 +65,12 @@ class Transfer(BaseModel):
         None, description="Departure platform number"
     )
     arrival_platform: str | None = Field(None, description="Arrival platform number")
+    riding_position: str | None = Field(
+        None, description="Train car riding position information (e.g., '[15両] 前 中 後')"
+    )
+    intermediate_stations: list[IntermediateStation] = Field(
+        default_factory=list, description="Stations between departure and arrival"
+    )
 
     def __str__(self) -> str:
         return f"{self.from_station} → {self.to_station} ({self.line_name})"

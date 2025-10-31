@@ -54,6 +54,8 @@ def format_route_table(routes: Route | list[Route], verbose: bool = False) -> No
                 transfer_table.add_column("Duration", style="green")
                 transfer_table.add_column("Cost", style="green")
                 transfer_table.add_column("Platform", style="blue")
+                if verbose:  # Only show riding position in verbose mode to avoid cluttering
+                    transfer_table.add_column("Riding Position", style="dim blue")
 
                 for transfer in route.transfers:
                     # Format timing information
@@ -78,7 +80,7 @@ def format_route_table(routes: Route | list[Route], verbose: bool = False) -> No
                     else:
                         platform_info = "-"
 
-                    transfer_table.add_row(
+                    row_data = [
                         transfer.from_station,
                         transfer.to_station,
                         transfer.line_name,
@@ -86,7 +88,11 @@ def format_route_table(routes: Route | list[Route], verbose: bool = False) -> No
                         f"{transfer.duration_minutes}分",
                         f"{transfer.cost_yen}円",
                         platform_info,
-                    )
+                    ]
+                    if verbose:  # Add riding position column in verbose mode
+                        row_data.append(transfer.riding_position or "-")
+
+                    transfer_table.add_row(*row_data)
 
                 console.print(transfer_table)
             else:
@@ -144,6 +150,19 @@ def format_route_detailed(routes: Route | list[Route]) -> None:
                         platforms.append(f"To: {transfer.arrival_platform}")
                     transfer_text += f"\n[bold]Platform:[/bold] {' | '.join(platforms)}"
 
+                # Add riding position information if available
+                if transfer.riding_position:
+                    transfer_text += f"\n[bold]Riding Position:[/bold] {transfer.riding_position}"
+
+                # Add intermediate stations if available
+                if transfer.intermediate_stations:
+                    transfer_text += "\n[bold]Intermediate Stations:[/bold]"
+                    for station in transfer.intermediate_stations:
+                        station_info = station.name
+                        if station.arrival_time:
+                            station_info += f" ({station.arrival_time})"
+                        transfer_text += f"\n  • {station_info}"
+
                 console.print(
                     Panel(transfer_text, title=f"Segment {i}", border_style="green")
                 )
@@ -176,6 +195,14 @@ def format_route_json(routes: Route | list[Route]) -> str:
                     "arrival_time": t.arrival_time,
                     "departure_platform": t.departure_platform,
                     "arrival_platform": t.arrival_platform,
+                    "riding_position": t.riding_position,
+                    "intermediate_stations": [
+                        {
+                            "name": station.name,
+                            "arrival_time": station.arrival_time,
+                        }
+                        for station in t.intermediate_stations
+                    ],
                 }
                 for t in route.transfers
             ],

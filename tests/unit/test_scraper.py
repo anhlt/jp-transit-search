@@ -428,3 +428,39 @@ class TestYahooTransitScraper:
         assert route3.duration == "16:37発→17:37着1時間0分（乗車41分）"
         assert route3.transfer_count == 1
         assert route3.cost == "IC優先：968円"
+
+        # Test detailed transfer information for route 1
+        assert len(route1.transfers) == 2
+
+        # Transfer 1: 大船 -> 横浜 (JR東海道本線)
+        transfer1 = route1.transfers[0]
+        assert transfer1.from_station == "大船"
+        assert transfer1.to_station == "横浜"
+        assert transfer1.line_name == "ＪＲ東海道本線"
+        assert transfer1.departure_time == "16:36"
+        assert transfer1.arrival_time == "16:52"
+        assert transfer1.departure_platform == "1・2番線"
+        assert transfer1.arrival_platform == "7番線"
+        assert transfer1.riding_position == "[15両] 前 中"
+        assert len(transfer1.intermediate_stations) == 1
+        assert transfer1.intermediate_stations[0].name == "戸塚"
+        assert transfer1.intermediate_stations[0].arrival_time == "16:42"
+
+        # Transfer 2: 横浜 -> 羽田空港第１・第２ターミナル(京急) (京急本線)
+        transfer2 = route1.transfers[1]
+        assert transfer2.from_station == "横浜"
+        assert transfer2.to_station == "羽田空港第１・第２ターミナル(京急)"
+        assert transfer2.line_name == "京急本線"
+        assert transfer2.departure_time == "16:58"
+        assert transfer2.arrival_time == "17:27"
+        assert transfer2.departure_platform == "2番線"
+        assert transfer2.arrival_platform == "2番線"
+        assert transfer2.riding_position is None
+        assert len(transfer2.intermediate_stations) == 10
+        # Test a few key intermediate stations
+        assert transfer2.intermediate_stations[0].name == "京急東神奈川"
+        assert transfer2.intermediate_stations[0].arrival_time == "17:00"
+        assert transfer2.intermediate_stations[3].name == "京急川崎"
+        assert transfer2.intermediate_stations[3].arrival_time == "17:09"
+        assert transfer2.intermediate_stations[9].name == "羽田空港第３ターミナル(京急)"
+        assert transfer2.intermediate_stations[9].arrival_time == "17:25"

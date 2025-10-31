@@ -226,3 +226,134 @@ class TestFormatters:
         assert "Prefecture" in output
         # Verbose mode should add more columns
         assert "Company" in output or "Line" in output
+
+    def test_format_route_detailed_with_intermediate_stations(self):
+        """Test detailed formatting with intermediate stations and enhanced features."""
+        from jp_transit_search.core.models import IntermediateStation
+
+        # Create route with enhanced transfer data
+        route_with_intermediates = Route(
+            from_station="大船",
+            to_station="羽田空港",
+            duration="58分",
+            cost="715円",
+            transfer_count=1,
+            transfers=[
+                Transfer(
+                    from_station="大船",
+                    to_station="横浜",
+                    line_name="ＪＲ東海道本線",
+                    duration_minutes=16,
+                    cost_yen=318,
+                    departure_time="16:36",
+                    arrival_time="16:52",
+                    departure_platform="1・2番線",
+                    arrival_platform="7番線",
+                    riding_position="[15両] 前 中",
+                    intermediate_stations=[
+                        IntermediateStation(name="戸塚", arrival_time="16:42")
+                    ]
+                ),
+                Transfer(
+                    from_station="横浜",
+                    to_station="羽田空港第１・第２ターミナル(京急)",
+                    line_name="京急本線",
+                    duration_minutes=29,
+                    cost_yen=397,
+                    departure_time="16:58",
+                    arrival_time="17:27",
+                    departure_platform="2番線",
+                    arrival_platform="2番線",
+                    intermediate_stations=[
+                        IntermediateStation(name="京急東神奈川", arrival_time="17:00"),
+                        IntermediateStation(name="京急川崎", arrival_time="17:09"),
+                        IntermediateStation(name="羽田空港第３ターミナル(京急)", arrival_time="17:25")
+                    ]
+                )
+            ]
+        )
+
+        console = Console(file=StringIO())
+        with patch('jp_transit_search.cli.formatters.console', console):
+            format_route_detailed(route_with_intermediates)
+            output = console.file.getvalue()
+
+        # Test route summary
+        assert "大船" in output
+        assert "羽田空港" in output
+        assert "58分" in output
+        assert "715円" in output
+
+        # Test platform information
+        assert "Platform: From: 1・2番線 | To: 7番線" in output
+        assert "Platform: From: 2番線 | To: 2番線" in output
+
+        # Test riding position
+        assert "Riding Position: [15両] 前 中" in output
+
+        # Test intermediate stations
+        assert "Intermediate Stations:" in output
+        assert "• 戸塚 (16:42)" in output
+        assert "• 京急東神奈川 (17:00)" in output
+        assert "• 京急川崎 (17:09)" in output
+        assert "• 羽田空港第３ターミナル(京急) (17:25)" in output
+
+    def test_format_route_json_with_intermediate_stations(self):
+        """Test JSON formatting includes intermediate stations and enhanced features."""
+        from jp_transit_search.core.models import IntermediateStation
+
+        route_with_intermediates = Route(
+            from_station="大船",
+            to_station="横浜",
+            duration="16分",
+            cost="318円",
+            transfer_count=0,
+            transfers=[
+                Transfer(
+                    from_station="大船",
+                    to_station="横浜",
+                    line_name="ＪＲ東海道本線",
+                    duration_minutes=16,
+                    cost_yen=318,
+                    departure_time="16:36",
+                    arrival_time="16:52",
+                    departure_platform="1・2番線",
+                    arrival_platform="7番線",
+                    riding_position="[15両] 前 中",
+                    intermediate_stations=[
+                        IntermediateStation(name="戸塚", arrival_time="16:42"),
+                        IntermediateStation(name="藤沢", arrival_time="16:48")
+                    ]
+                )
+            ]
+        )
+
+        output = format_route_json(route_with_intermediates)
+        data = json.loads(output)
+
+        # Verify structure
+        assert len(data) == 1
+        assert len(data[0]["transfers"]) == 1
+
+        transfer = data[0]["transfers"][0]
+
+        # Test platform information in JSON
+        assert transfer["departure_platform"] == "1・2番線"
+        assert transfer["arrival_platform"] == "7番線"
+
+        # Test riding position in JSON
+        assert transfer["riding_position"] == "[15両] 前 中"
+
+        # Test intermediate stations in JSON
+        assert "intermediate_stations" in transfer
+        assert len(transfer["intermediate_stations"]) == 2
+
+        # Test first intermediate station
+        station1 = transfer["intermediate_stations"][0]
+        assert station1["name"] == "戸塚"
+        assert station1["arrival_time"] == "16:42"
+
+        # Test second intermediate station
+        station2 = transfer["intermediate_stations"][1]
+        assert station2["name"] == "藤沢"
+        assert station2["arrival_time"] == "16:48"
