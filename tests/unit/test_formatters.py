@@ -58,7 +58,7 @@ class TestFormatters:
     def test_format_route_table_basic(self):
         """Test basic table formatting."""
         console = Console(file=StringIO())
-        with patch('jp_transit_search.cli.formatters.console', console):
+        with patch("jp_transit_search.cli.formatters.console", console):
             format_route_table(self.sample_route, verbose=False)
             output = console.file.getvalue()
 
@@ -70,7 +70,7 @@ class TestFormatters:
     def test_format_route_table_verbose(self):
         """Test verbose table formatting."""
         console = Console(file=StringIO())
-        with patch('jp_transit_search.cli.formatters.console', console):
+        with patch("jp_transit_search.cli.formatters.console", console):
             format_route_table(self.sample_route, verbose=True)
             output = console.file.getvalue()
 
@@ -84,7 +84,7 @@ class TestFormatters:
     def test_format_route_table_no_transfers(self):
         """Test table formatting with no transfers."""
         console = Console(file=StringIO())
-        with patch('jp_transit_search.cli.formatters.console', console):
+        with patch("jp_transit_search.cli.formatters.console", console):
             format_route_table(self.route_no_transfers, verbose=False)
             output = console.file.getvalue()
 
@@ -96,7 +96,7 @@ class TestFormatters:
     def test_format_route_table_no_transfers_verbose(self):
         """Test verbose table formatting with no transfers."""
         console = Console(file=StringIO())
-        with patch('jp_transit_search.cli.formatters.console', console):
+        with patch("jp_transit_search.cli.formatters.console", console):
             format_route_table(self.route_no_transfers, verbose=True)
             output = console.file.getvalue()
 
@@ -106,7 +106,7 @@ class TestFormatters:
     def test_format_route_detailed(self):
         """Test detailed route formatting."""
         console = Console(file=StringIO())
-        with patch('jp_transit_search.cli.formatters.console', console):
+        with patch("jp_transit_search.cli.formatters.console", console):
             format_route_detailed(self.sample_route)
             output = console.file.getvalue()
 
@@ -125,7 +125,7 @@ class TestFormatters:
     def test_format_route_detailed_no_transfers(self):
         """Test detailed formatting with no transfers."""
         console = Console(file=StringIO())
-        with patch('jp_transit_search.cli.formatters.console', console):
+        with patch("jp_transit_search.cli.formatters.console", console):
             format_route_detailed(self.route_no_transfers)
             output = console.file.getvalue()
 
@@ -206,7 +206,7 @@ class TestFormatters:
     def test_format_station_table_basic(self):
         """Test basic station table formatting."""
         console = Console(file=StringIO())
-        with patch('jp_transit_search.cli.formatters.console', console):
+        with patch("jp_transit_search.cli.formatters.console", console):
             format_station_table([], verbose=False)
             output = console.file.getvalue()
 
@@ -217,7 +217,7 @@ class TestFormatters:
     def test_format_station_table_verbose(self):
         """Test verbose station table formatting."""
         console = Console(file=StringIO())
-        with patch('jp_transit_search.cli.formatters.console', console):
+        with patch("jp_transit_search.cli.formatters.console", console):
             format_station_table([], verbose=True)
             output = console.file.getvalue()
 
@@ -252,7 +252,7 @@ class TestFormatters:
                     riding_position="[15両] 前 中",
                     intermediate_stations=[
                         IntermediateStation(name="戸塚", arrival_time="16:42")
-                    ]
+                    ],
                 ),
                 Transfer(
                     from_station="横浜",
@@ -267,14 +267,16 @@ class TestFormatters:
                     intermediate_stations=[
                         IntermediateStation(name="京急東神奈川", arrival_time="17:00"),
                         IntermediateStation(name="京急川崎", arrival_time="17:09"),
-                        IntermediateStation(name="羽田空港第３ターミナル(京急)", arrival_time="17:25")
-                    ]
-                )
-            ]
+                        IntermediateStation(
+                            name="羽田空港第３ターミナル(京急)", arrival_time="17:25"
+                        ),
+                    ],
+                ),
+            ],
         )
 
         console = Console(file=StringIO())
-        with patch('jp_transit_search.cli.formatters.console', console):
+        with patch("jp_transit_search.cli.formatters.console", console):
             format_route_detailed(route_with_intermediates)
             output = console.file.getvalue()
 
@@ -322,10 +324,10 @@ class TestFormatters:
                     riding_position="[15両] 前 中",
                     intermediate_stations=[
                         IntermediateStation(name="戸塚", arrival_time="16:42"),
-                        IntermediateStation(name="藤沢", arrival_time="16:48")
-                    ]
+                        IntermediateStation(name="藤沢", arrival_time="16:48"),
+                    ],
                 )
-            ]
+            ],
         )
 
         output = format_route_json(route_with_intermediates)

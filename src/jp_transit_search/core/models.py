@@ -66,7 +66,8 @@ class Transfer(BaseModel):
     )
     arrival_platform: str | None = Field(None, description="Arrival platform number")
     riding_position: str | None = Field(
-        None, description="Train car riding position information (e.g., '[15両] 前 中 後')"
+        None,
+        description="Train car riding position information (e.g., '[15両] 前 中 後')",
     )
     intermediate_stations: list[IntermediateStation] = Field(
         default_factory=list, description="Stations between departure and arrival"

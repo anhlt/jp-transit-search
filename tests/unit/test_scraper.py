@@ -215,7 +215,12 @@ class TestYahooTransitScraper:
         from pathlib import Path
 
         # Load the actual HTML sample for 大船→渋谷 search results
-        html_path = Path(__file__).parent.parent / "fixtures" / "search_results" / "search_大船渋谷.html"
+        html_path = (
+            Path(__file__).parent.parent
+            / "fixtures"
+            / "search_results"
+            / "search_大船渋谷.html"
+        )
 
         with open(html_path, encoding="utf-8") as f:
             html_content = f.read()
@@ -265,7 +270,12 @@ class TestYahooTransitScraper:
         from pathlib import Path
 
         # Load the actual HTML sample for 大船→新宿 search results
-        html_path = Path(__file__).parent.parent / "fixtures" / "search_results" / "search_大船新宿.html"
+        html_path = (
+            Path(__file__).parent.parent
+            / "fixtures"
+            / "search_results"
+            / "search_大船新宿.html"
+        )
 
         with open(html_path, encoding="utf-8") as f:
             html_content = f.read()
@@ -274,12 +284,14 @@ class TestYahooTransitScraper:
 
         # Create mock request object with specific time
         mock_request = type(
-            "MockRequest", (), {
+            "MockRequest",
+            (),
+            {
                 "from_station": "大船",
                 "to_station": "新宿",
                 "search_datetime": datetime(2025, 10, 31, 16, 31),
-                "search_type": "earliest"
-            }
+                "search_type": "earliest",
+            },
         )()
 
         # Parse the route page
@@ -326,7 +338,7 @@ class TestYahooTransitScraper:
             from_station="大船",
             to_station="新宿",
             search_datetime=search_dt,
-            search_type="earliest"
+            search_type="earliest",
         )
 
         url = request.to_yahoo_url()
@@ -338,7 +350,7 @@ class TestYahooTransitScraper:
             "d=31",
             "hh=16",
             "m1=3",
-            "m2=1"
+            "m2=1",
         ]
 
         for param in expected_params:
@@ -358,7 +370,7 @@ class TestYahooTransitScraper:
             from_station="大船",
             to_station="新宿",
             search_datetime=search_dt,
-            search_type="earliest"
+            search_type="earliest",
         )
         assert "s=0" in request1.to_yahoo_url()
 
@@ -367,7 +379,7 @@ class TestYahooTransitScraper:
             from_station="大船",
             to_station="新宿",
             search_datetime=search_dt,
-            search_type="cheapest"
+            search_type="cheapest",
         )
         assert "s=1" in request2.to_yahoo_url()
 
@@ -376,7 +388,7 @@ class TestYahooTransitScraper:
             from_station="大船",
             to_station="新宿",
             search_datetime=search_dt,
-            search_type="easiest"
+            search_type="easiest",
         )
         assert "s=2" in request3.to_yahoo_url()
 
@@ -384,19 +396,23 @@ class TestYahooTransitScraper:
         """Test parsing 大船→羽田空港 route with specific departure time."""
         from datetime import datetime, time
 
-        with open("tests/fixtures/search_results/search_大船羽田空港.html", encoding="utf-8") as f:
+        with open(
+            "tests/fixtures/search_results/search_大船羽田空港.html", encoding="utf-8"
+        ) as f:
             html_content = f.read()
 
         scraper = YahooTransitScraper()
 
         # Create mock request object with specific time
         mock_request = type(
-            "MockRequest", (), {
+            "MockRequest",
+            (),
+            {
                 "from_station": "大船",
                 "to_station": "羽田空港(東京)",
                 "search_datetime": datetime(2025, 10, 31, 16, 31),
-                "search_type": "earliest"
-            }
+                "search_type": "earliest",
+            },
         )()
 
         # Parse the route page

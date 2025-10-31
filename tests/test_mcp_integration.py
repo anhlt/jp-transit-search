@@ -141,7 +141,9 @@ class TestMCPIntegration:
         json_content = result[1]
         assert "JSON Data:" in json_content.text
         assert "name" in json_content.text  # Check for actual field in Station model
-        assert "prefecture" in json_content.text  # Check for actual field in Station model
+        assert (
+            "prefecture" in json_content.text
+        )  # Check for actual field in Station model
 
         # Verify the station searcher was called correctly
         mcp_server.station_searcher.search_stations.assert_called_once_with(
