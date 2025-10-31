@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup, Tag
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from .exceptions import NetworkError, RouteNotFoundError, ScrapingError, ValidationError
-from .models import Route, RouteSearchRequest, Transfer
+from .models import IntermediateStation, Route, RouteSearchRequest, Transfer
 
 
 class YahooTransitScraper:
@@ -336,74 +336,14 @@ class YahooTransitScraper:
         # Extract all fare sections (segments between stations)
         fare_sections = route_detail.find_all("div", class_="fareSection")
 
-        for i, section in enumerate(fare_sections):
-            if i >= len(stations) - 1:
-                break
+        # Track current station index for transfers
+        current_station_idx = 0
 
-            # Extract line information and platform details
-            transport_info = section.find("li", class_="transport")
-            line_name = "Unknown"
-            departure_platform = None
-            arrival_platform = None
+        for section in fare_sections:
+            # Find all access divs within this fare section
+            access_divs = section.find_all("div", class_="access")
 
-            if transport_info:
-                # Get the transport div
-                line_div = transport_info.find("div")
-                if line_div:
-                    # Extract line name from the direct text content
-                    # The structure is: [icon] LineName [destination] [platform]
-                    full_text = line_div.get_text().strip()
-
-                    # Clean up the text by removing icon and platform info
-                    # Remove [line] and [発]...番線 patterns
-                    clean_text = re.sub(r"\[.*?\]", "", full_text)
-                    clean_text = re.sub(
-                        r"\[発\].*?番線.*?→.*?\[着\].*?番線", "", clean_text
-                    )
-                    clean_text = re.sub(r"\s+", " ", clean_text).strip()
-
-                    # Extract line name - look for patterns ending with "線"
-                    line_match = re.search(r"([^\s]+線)", clean_text)
-                    if line_match:
-                        line_name = line_match.group(1).strip()
-                    else:
-                        # Alternative: extract from spans
-                        destination_span = line_div.find("span", class_="destination")
-                        if destination_span:
-                            destination_text = destination_span.get_text().strip()
-                            # Remove destination from clean text to get line name
-                            line_name = clean_text.replace(destination_text, "").strip()
-                        else:
-                            line_name = clean_text
-
-                # Extract platform information
-                platform_span = transport_info.find("span", class_="platform")
-                if platform_span:
-                    platform_text = platform_span.get_text().strip()
-                    # Parse platform format: "[発] 4番線 → [着] 1番線"
-                    platform_parts = platform_text.split("→")
-                    if len(platform_parts) >= 2:
-                        # Extract departure platform
-                        dep_match = re.search(r"(\d+)番線", platform_parts[0])
-                        if dep_match:
-                            departure_platform = f"{dep_match.group(1)}番線"
-
-                        # Extract arrival platform
-                        arr_match = re.search(r"(\d+)番線", platform_parts[1])
-                        if arr_match:
-                            arrival_platform = f"{arr_match.group(1)}番線"
-
-            # Extract duration from stop information
-            duration_minutes = 0
-            stop_info = section.find("li", class_="stop")
-            if stop_info:
-                stop_text = stop_info.get_text().strip()
-                match = re.search(r"(\d+)駅", stop_text)
-                if match:
-                    # More accurate estimate: 2.5 minutes per station for local trains
-                    duration_minutes = int(int(match.group(1)) * 2.5)
-
-            # Extract fare
+            # Extract fare information for this section (shared across all transfers in this section)
             cost_yen = 0
             fare_element = section.find("p", class_="fare")
             if fare_element:
@@ -412,53 +352,189 @@ class YahooTransitScraper:
                 if match:
                     cost_yen = int(match.group(1))
 
-            # Extract departure and arrival times
-            departure_time = None
-            arrival_time = None
+            # Process each access div as a separate transfer
+            for access_div in access_divs:
+                if current_station_idx >= len(stations) - 1:
+                    break
 
-            # Get departure time from current station
-            if i < len(stations) and stations[i]["times"]:
-                dep_times = stations[i]["times"]
-                if isinstance(dep_times, list):
-                    # For intermediate stations, use the second time if available (departure time)
-                    if i > 0 and len(dep_times) > 1:
-                        departure_time = re.sub(r"[^\d:]", "", dep_times[1])
+                # Extract transport information from this access div
+                transport_info = access_div.find("li", class_="transport")
+                line_name = "Unknown"
+                departure_platform = None
+                arrival_platform = None
+
+                if transport_info:
+                    # Get the transport div
+                    line_div = transport_info.find("div")
+                    if line_div:
+                        # Extract line name from the direct text content
+                        # The structure is: [icon] LineName [destination] [platform]
+                        full_text = line_div.get_text().strip()
+
+                        # Clean up the text by removing icon and platform info
+                        # Remove [line] and [発]...番線 patterns
+                        clean_text = re.sub(r"\[.*?\]", "", full_text)
+                        clean_text = re.sub(
+                            r"\[発\].*?番線.*?→.*?\[着\].*?番線", "", clean_text
+                        )
+                        clean_text = re.sub(r"\s+", " ", clean_text).strip()
+
+                        # Extract line name - look for patterns ending with "線"
+                        line_match = re.search(r"([^\s]+線)", clean_text)
+                        if line_match:
+                            line_name = line_match.group(1).strip()
+                        else:
+                            # Alternative: extract from spans
+                            destination_span = line_div.find("span", class_="destination")
+                            if destination_span:
+                                destination_text = destination_span.get_text().strip()
+                                # Remove destination from clean text to get line name
+                                line_name = clean_text.replace(destination_text, "").strip()
+                            else:
+                                line_name = clean_text
+
+                # Extract platform information from the access div (outside transport_info)
+                platform_li = access_div.find("li", class_="platform")
+                if platform_li:
+                    platform_text = platform_li.get_text().strip()
+                    # Parse platform format: "[発] 2番線 → [着] 5番線" or "[発] 2番線 → [着] 情報なし"
+                    platform_parts = platform_text.split("→")
+                    if len(platform_parts) >= 2:
+                        # Extract departure platform - find all span.num elements
+                        dep_nums = platform_li.find_all("span", class_="num")
+
+                        # Handle departure platform (first part before →)
+                        if len(dep_nums) >= 1:
+                            dep_platform_text = dep_nums[0].get_text().strip()
+                            departure_platform = f"{dep_platform_text}番線"
+
+                        # Handle arrival platform (second part after →)
+                        if len(dep_nums) >= 2:
+                            arr_platform_text = dep_nums[1].get_text().strip()
+                            arrival_platform = f"{arr_platform_text}番線"
+                        elif "情報なし" not in platform_parts[1]:
+                            # Fallback: try to extract from text after →
+                            arr_part = platform_parts[1].strip()
+                            # Look for patterns like "6番線", "情報なし", "７番線" etc.
+                            arr_match = re.search(r"([０-９\d・・]+)番線", arr_part)
+                            if arr_match:
+                                arrival_platform = f"{arr_match.group(1)}番線"
+                            else:
+                                # Extract text between "[着]" and any whitespace/punctuation
+                                arr_match = re.search(r"\[着\]\s*([^→\s]+)", arr_part)
+                                if arr_match:
+                                    arrival_platform = arr_match.group(1)
+
+                # Extract riding position information
+                riding_position = None
+                riding_pos_li = access_div.find("li", class_="ridingPos")
+                if riding_pos_li:
+                    riding_pos_text = riding_pos_li.get_text().strip()
+                    # Remove "乗車位置：" prefix if present
+                    if riding_pos_text.startswith("乗車位置："):
+                        riding_position = riding_pos_text[5:]  # Remove "乗車位置：" prefix
+                    elif riding_pos_text:
+                        riding_position = riding_pos_text
+
+                # Extract duration and intermediate stations from stop information
+                duration_minutes = 0
+                intermediate_stations = []
+                stop_info = access_div.find("li", class_="stop")
+                if stop_info:
+                    stop_text = stop_info.get_text().strip()
+                    match = re.search(r"(\d+)駅", stop_text)
+                    if match:
+                        # More accurate estimate: 2.5 minutes per station for local trains
+                        duration_minutes = int(int(match.group(1)) * 2.5)
+
+                    # Parse intermediate stations from structured HTML first, fall back to regex
+                    stop_ul = stop_info.find("ul")
+                    if stop_ul:
+                        # Use structured HTML parsing (preferred method)
+                        station_items = stop_ul.find_all("li")
+                        for item in station_items:
+                            dt_time = item.find("dt")
+                            dd_station = item.find("dd")
+                            if dt_time and dd_station:
+                                time_text = dt_time.get_text().strip()
+                                station_text = dd_station.get_text().strip()
+                                # Clean station name by removing extra whitespace and icon spans
+                                clean_station_name = re.sub(r"\s+", "", station_text.strip())
+                                if clean_station_name and time_text:
+                                    intermediate_stations.append(
+                                        IntermediateStation(
+                                            name=clean_station_name,
+                                            arrival_time=time_text
+                                        )
+                                    )
                     else:
-                        # For first station or single time, use first time
-                        for time_str in dep_times:
-                            if "発" in time_str:
-                                departure_time = re.sub(r"[^\d:]", "", time_str)
+                        # Fallback to regex parsing for compatibility with older HTML formats
+                        station_pattern = r"(\d{2}:\d{2})([^0-9]+?)(?=\d{2}:\d{2}|$)"
+                        station_matches = re.findall(station_pattern, stop_text)
+
+                        for time_str, station_name in station_matches:
+                            # Clean up station name by removing extra whitespace
+                            clean_station_name = re.sub(r"\s+", "", station_name.strip())
+                            if clean_station_name:
+                                intermediate_stations.append(
+                                    IntermediateStation(
+                                        name=clean_station_name,
+                                        arrival_time=time_str
+                                    )
+                                )
+
+                # Extract departure and arrival times
+                departure_time = None
+                arrival_time = None
+
+                # Get departure time from current station
+                if current_station_idx < len(stations) and stations[current_station_idx]["times"]:
+                    dep_times = stations[current_station_idx]["times"]
+                    if isinstance(dep_times, list):
+                        # For intermediate stations, use the second time if available (departure time)
+                        if current_station_idx > 0 and len(dep_times) > 1:
+                            departure_time = re.sub(r"[^\d:]", "", dep_times[1])
+                        else:
+                            # For first station or single time, use first time
+                            for time_str in dep_times:
+                                if "発" in time_str:
+                                    departure_time = re.sub(r"[^\d:]", "", time_str)
+                                    break
+                            if not departure_time and dep_times:
+                                departure_time = re.sub(r"[^\d:]", "", dep_times[0])
+
+                # Get arrival time at next station
+                if current_station_idx + 1 < len(stations) and stations[current_station_idx + 1]["times"]:
+                    next_times = stations[current_station_idx + 1]["times"]
+                    if isinstance(next_times, list):
+                        # Arrival time is the first time or marked with 着
+                        for time_str in next_times:
+                            if "着" in time_str:
+                                arrival_time = re.sub(r"[^\d:]", "", time_str)
                                 break
-                        if not departure_time and dep_times:
-                            departure_time = re.sub(r"[^\d:]", "", dep_times[0])
+                        if not arrival_time and next_times:
+                            arrival_time = re.sub(r"[^\d:]", "", next_times[0])
 
-            # Get arrival time at next station
-            if i + 1 < len(stations) and stations[i + 1]["times"]:
-                next_times = stations[i + 1]["times"]
-                if isinstance(next_times, list):
-                    # Arrival time is the first time or marked with 着
-                    for time_str in next_times:
-                        if "着" in time_str:
-                            arrival_time = re.sub(r"[^\d:]", "", time_str)
-                            break
-                    if not arrival_time and next_times:
-                        arrival_time = re.sub(r"[^\d:]", "", next_times[0])
+                # Create transfer with detailed information
+                from_station_name = stations[current_station_idx]["name"]
+                to_station_name = stations[current_station_idx + 1]["name"]
+                if isinstance(from_station_name, str) and isinstance(to_station_name, str):
+                    transfer = Transfer(
+                        from_station=from_station_name,
+                        to_station=to_station_name,
+                        line_name=line_name,
+                        duration_minutes=int(duration_minutes),
+                        cost_yen=cost_yen,
+                        departure_time=departure_time,
+                        arrival_time=arrival_time,
+                        departure_platform=departure_platform,
+                        arrival_platform=arrival_platform,
+                        riding_position=riding_position,
+                        intermediate_stations=intermediate_stations,
+                    )
+                    transfers.append(transfer)
 
-            # Create transfer with detailed information
-            from_station_name = stations[i]["name"]
-            to_station_name = stations[i + 1]["name"]
-            if isinstance(from_station_name, str) and isinstance(to_station_name, str):
-                transfer = Transfer(
-                    from_station=from_station_name,
-                    to_station=to_station_name,
-                    line_name=line_name,
-                    duration_minutes=int(duration_minutes),
-                    cost_yen=cost_yen,
-                    departure_time=departure_time,
-                    arrival_time=arrival_time,
-                    departure_platform=departure_platform,
-                    arrival_platform=arrival_platform,
-                )
-                transfers.append(transfer)
+                # Move to next station for the next transfer
+                current_station_idx += 1
 
         return transfers

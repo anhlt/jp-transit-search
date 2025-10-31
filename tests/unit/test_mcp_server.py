@@ -237,3 +237,66 @@ class TestTransitMCPServer:
         # but we can check that the server has the expected methods
         assert hasattr(server.server, "list_tools")
         assert callable(server.server.list_tools)
+
+    @pytest.mark.asyncio
+    async def test_search_route_enhanced_output(self, server):
+        """Test route search with enhanced platform and intermediate station output."""
+        from jp_transit_search.core.models import IntermediateStation
+
+        # Create a route with enhanced data
+        enhanced_route = Route(
+            from_station="大船",
+            to_station="新宿",
+            duration="48分",
+            cost="945円",
+            transfer_count=0,
+            transfers=[
+                Transfer(
+                    from_station="大船",
+                    to_station="新宿",
+                    line_name="JR湘南新宿ライン快速",
+                    duration_minutes=48,
+                    cost_yen=945,
+                    departure_platform="2番線",
+                    arrival_platform="4番線",
+                    riding_position="[15両] 前 中",
+                    intermediate_stations=[
+                        IntermediateStation(name="戸塚", arrival_time="17:08"),
+                        IntermediateStation(name="横浜", arrival_time="17:19"),
+                        IntermediateStation(name="武蔵小杉", arrival_time="17:30"),
+                    ],
+                ),
+            ],
+        )
+
+        with patch.object(server.scraper, "search_route", return_value=[enhanced_route]):
+            result = await server._search_route(
+                {"from_station": "大船", "to_station": "新宿"}
+            )
+
+        assert len(result) == 2  # Text content and JSON data
+
+        # Check text content includes enhanced fields
+        text_content = result[0].text
+        assert "大船" in text_content
+        assert "新宿" in text_content
+        assert "JR湘南新宿ライン快速" in text_content
+
+        # Check platform information is displayed
+        assert "Platform: From: 2番線 | To: 4番線" in text_content
+
+        # Check riding position is displayed
+        assert "Position: [15両] 前 中" in text_content
+
+        # Check intermediate stations are displayed
+        assert "Intermediate stations:" in text_content
+        assert "戸塚 (17:08)" in text_content
+        assert "横浜 (17:19)" in text_content
+        assert "武蔵小杉 (17:30)" in text_content
+
+        # Check JSON data includes all fields
+        json_content = result[1].text
+        assert "departure_platform" in json_content
+        assert "arrival_platform" in json_content
+        assert "riding_position" in json_content
+        assert "intermediate_stations" in json_content
