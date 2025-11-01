@@ -1,0 +1,59 @@
+from bs4 import BeautifulSoup
+import re
+
+# Read the HTML file
+with open('/home/anh.le/workspace/transist_mcp/jp-transit-search/tests/fixtures/search_results/search_横浜渋谷_fastest.html', 'r', encoding='utf-8') as f:
+    html_content = f.read()
+
+soup = BeautifulSoup(html_content, 'html.parser')
+
+# Find the route detail section
+route_detail = soup.find("div", class_="routeDetail")
+if route_detail:
+    print("=== ROUTE DETAIL STRUCTURE ===")
+    print(f"Found route detail: {route_detail.name}")
+    
+    # Find all stations
+    stations = route_detail.find_all("div", class_="station")
+    print(f"\nStations found: {len(stations)}")
+    for i, station in enumerate(stations):
+        station_name = station.find("dt").get_text().strip() if station.find("dt") else "Unknown"
+        times = station.find("ul", class_="time")
+        time_list = []
+        if times:
+            time_elements = times.find_all("li")
+            time_list = [t.get_text().strip() for t in time_elements]
+        print(f"  Station {i}: {station_name}, Times: {time_list}")
+    
+    # Find all fare sections
+    fare_sections = route_detail.find_all("div", class_="fareSection")
+    print(f"\nFare sections found: {len(fare_sections)}")
+    
+    for i, section in enumerate(fare_sections):
+        print(f"\n--- Fare Section {i} ---")
+        
+        # Find all access divs within this fare section
+        access_divs = section.find_all("div", class_="access")
+        print(f"Access divs in this fare section: {len(access_divs)}")
+        
+        for j, access in enumerate(access_divs):
+            print(f"\n  Access {j}:")
+            transport = access.find("li", class_="transport")
+            if transport:
+                line_div = transport.find("div")
+                if line_div:
+                    line_text = line_div.get_text().strip()
+                    print(f"    Line text: {line_text}")
+                    
+                    # Look for platform info
+                    platform_span = transport.find("span", class_="platform")
+                    if platform_span:
+                        platform_text = platform_span.get_text().strip()
+                        print(f"    Platform: {platform_text}")
+        
+        # Check for fare info
+        fare_element = section.find("p", class_="fare")
+        if fare_element:
+            fare_text = fare_element.get_text().strip()
+            print(f"  Fare: {fare_text}")
+
