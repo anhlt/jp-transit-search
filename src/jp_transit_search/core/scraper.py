@@ -385,11 +385,15 @@ class YahooTransitScraper:
                             line_name = line_match.group(1).strip()
                         else:
                             # Alternative: extract from spans
-                            destination_span = line_div.find("span", class_="destination")
+                            destination_span = line_div.find(
+                                "span", class_="destination"
+                            )
                             if destination_span:
                                 destination_text = destination_span.get_text().strip()
                                 # Remove destination from clean text to get line name
-                                line_name = clean_text.replace(destination_text, "").strip()
+                                line_name = clean_text.replace(
+                                    destination_text, ""
+                                ).strip()
                             else:
                                 line_name = clean_text
 
@@ -432,7 +436,9 @@ class YahooTransitScraper:
                     riding_pos_text = riding_pos_li.get_text().strip()
                     # Remove "乗車位置：" prefix if present
                     if riding_pos_text.startswith("乗車位置："):
-                        riding_position = riding_pos_text[5:]  # Remove "乗車位置：" prefix
+                        riding_position = riding_pos_text[
+                            5:
+                        ]  # Remove "乗車位置：" prefix
                     elif riding_pos_text:
                         riding_position = riding_pos_text
 
@@ -459,12 +465,14 @@ class YahooTransitScraper:
                                 time_text = dt_time.get_text().strip()
                                 station_text = dd_station.get_text().strip()
                                 # Clean station name by removing extra whitespace and icon spans
-                                clean_station_name = re.sub(r"\s+", "", station_text.strip())
+                                clean_station_name = re.sub(
+                                    r"\s+", "", station_text.strip()
+                                )
                                 if clean_station_name and time_text:
                                     intermediate_stations.append(
                                         IntermediateStation(
                                             name=clean_station_name,
-                                            arrival_time=time_text
+                                            arrival_time=time_text,
                                         )
                                     )
                     else:
@@ -474,12 +482,13 @@ class YahooTransitScraper:
 
                         for time_str, station_name in station_matches:
                             # Clean up station name by removing extra whitespace
-                            clean_station_name = re.sub(r"\s+", "", station_name.strip())
+                            clean_station_name = re.sub(
+                                r"\s+", "", station_name.strip()
+                            )
                             if clean_station_name:
                                 intermediate_stations.append(
                                     IntermediateStation(
-                                        name=clean_station_name,
-                                        arrival_time=time_str
+                                        name=clean_station_name, arrival_time=time_str
                                     )
                                 )
 
@@ -488,7 +497,10 @@ class YahooTransitScraper:
                 arrival_time = None
 
                 # Get departure time from current station
-                if current_station_idx < len(stations) and stations[current_station_idx]["times"]:
+                if (
+                    current_station_idx < len(stations)
+                    and stations[current_station_idx]["times"]
+                ):
                     dep_times = stations[current_station_idx]["times"]
                     if isinstance(dep_times, list):
                         # For intermediate stations, use the second time if available (departure time)
@@ -504,7 +516,10 @@ class YahooTransitScraper:
                                 departure_time = re.sub(r"[^\d:]", "", dep_times[0])
 
                 # Get arrival time at next station
-                if current_station_idx + 1 < len(stations) and stations[current_station_idx + 1]["times"]:
+                if (
+                    current_station_idx + 1 < len(stations)
+                    and stations[current_station_idx + 1]["times"]
+                ):
                     next_times = stations[current_station_idx + 1]["times"]
                     if isinstance(next_times, list):
                         # Arrival time is the first time or marked with 着
@@ -518,7 +533,9 @@ class YahooTransitScraper:
                 # Create transfer with detailed information
                 from_station_name = stations[current_station_idx]["name"]
                 to_station_name = stations[current_station_idx + 1]["name"]
-                if isinstance(from_station_name, str) and isinstance(to_station_name, str):
+                if isinstance(from_station_name, str) and isinstance(
+                    to_station_name, str
+                ):
                     transfer = Transfer(
                         from_station=from_station_name,
                         to_station=to_station_name,

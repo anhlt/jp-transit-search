@@ -213,6 +213,57 @@ The GitHub Action (``.github/workflows/update-stations.yml``) includes:
 - **Rich Feedback**: Detailed success/failure comments with statistics
 - **Git Integration**: Proper commit messages with metadata
 
+## 🔧 Station Crawler Features
+
+### Advanced Deduplication System
+The station crawler uses a sophisticated **ID-based deduplication system** that ensures no duplicate stations are added to your database:
+
+#### How Deduplication Works
+1. **Station ID Extraction**: Extracts unique station IDs directly from Yahoo Transit URLs using pattern `/station/(\d+)`
+2. **Primary Key**: Uses Yahoo's unique station IDs as the primary deduplication key
+3. **Fallback Logic**: Falls back to `"{name}_{prefecture}"` format when station ID is unavailable
+4. **Real-time Checking**: Identifies and skips duplicates during crawling with debug logging
+
+#### Example Deduplication in Action
+```
+DEBUG: Skipping duplicate station: 秋葉原 (ID: 22492) (東京都)
+DEBUG: Skipping duplicate station: 新宿 (ID: 22741) (東京都) 
+DEBUG: Skipping duplicate station: 渋谷 (ID: 23043) (東京都)
+```
+
+**Benefits:**
+- ✅ **Prevents duplicate stations** when the same station appears on multiple railway lines
+- ✅ **Maintains data integrity** across different prefecture crawls
+- ✅ **Robust handling** of edge cases where station IDs are unavailable
+- ✅ **Efficient crawling** by skipping already-processed stations
+
+### Incremental CSV Writing
+The crawler writes stations to CSV files **incrementally during crawling**, not just at the end:
+
+#### How Incremental Writing Works
+1. **Checkpoint Intervals**: Writes to CSV every 50 stations (configurable)
+2. **Real-time Persistence**: Stations are saved immediately when checkpoint is reached
+3. **Header Management**: Automatically writes CSV headers when creating new files
+4. **Resume-Friendly**: Works seamlessly with resume functionality
+
+#### Benefits of Incremental Writing
+- ✅ **Progress Preservation**: Partial results saved if crawling is interrupted
+- ✅ **Memory Efficiency**: Doesn't hold all stations in memory until the end
+- ✅ **Real-time Visibility**: See results being written as crawling progresses
+- ✅ **Robustness**: Handles crashes and network interruptions gracefully
+
+#### Using the Enhanced Crawler
+```bash
+# Start fresh crawl with incremental writing
+uv run jp-transit stations crawl --output data/stations.csv
+
+# Resume from existing file (resumes writing incrementally)
+uv run jp-transit stations crawl --resume --output data/stations.csv
+
+# Monitor progress in real-time
+tail -f data/stations.csv  # Watch stations being added during crawl
+```
+
 ## 📊 Creating and Managing CSV Station Data
 
 ### Method 1: Using the MCP Server Tools (Recommended)
@@ -760,6 +811,8 @@ Yahoo Transit → StationCrawler → Enhanced Station Model → CSV Storage → 
 - ✅ Improved CSV persistence with full field support
 - ✅ Added comprehensive error handling and fallbacks
 - ✅ Full integration with Yahoo Transit route search
+- ✅ **Improved Station Crawler with ID-based Deduplication**
+- ✅ **Incremental CSV Writing During Crawling**
 
 ## 📄 License
 

@@ -61,7 +61,7 @@ class TestStationCLICommands:
             assert result.exit_code == 0
             assert "✓ Successfully crawled" in result.output
             mock_crawler.crawl_all_stations.assert_called_once()
-            mock_crawler.save_to_csv.assert_called_once()
+            # CSV writing now happens incrementally within crawl_all_stations call
 
     @patch("jp_transit_search.cli.station_commands.StationCrawler")
     def test_crawl_command_error(self, mock_crawler_class, runner):

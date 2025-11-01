@@ -42,20 +42,30 @@ def stations() -> None:
     default="data/crawl_state.json",
     help="State file for tracking progress",
 )
-def crawl_stations(output: str, timeout: int, resume: bool, state_file: str) -> None:
+@click.option(
+    "--max-lines",
+    "-m",
+    type=int,
+    help="Maximum railway lines to crawl per prefecture (default: no limit)",
+)
+def crawl_stations(
+    output: str, timeout: int, resume: bool, state_file: str, max_lines: int | None
+) -> None:
     """Crawl station data from Yahoo Transit with resumable functionality.
 
-    The crawler shows detailed progress including:
-    - Number of stations found and processed
-    - Current prefecture and railway line being crawled
-    - Duplicate detection and filtering
-    - Automatic checkpointing every 50 stations
+    The crawler shows detailed real-time progress including:
+    - Current prefecture (1-47) and railway line being crawled
+    - Individual stations being processed with names
+    - Number of stations found and duplicates filtered
+    - Crawl rate (stations per minute) and elapsed time
+    - Automatic checkpointing and state saving
 
     Use --resume to continue from a previous interrupted crawl.
+    Use --max-lines to limit railway lines per prefecture (useful for testing).
 
     Examples:
         jp-transit stations crawl
-        jp-transit stations crawl --output my_stations.csv
+        jp-transit stations crawl --output my_stations.csv --max-lines 5
         jp-transit stations crawl --resume --timeout 60
     """
     output_path = Path(output)
@@ -87,26 +97,47 @@ def crawl_stations(output: str, timeout: int, resume: bool, state_file: str) -> 
         elapsed_sec = int(data["elapsed_time"] % 60)
         time_str = f"{elapsed_min:02d}:{elapsed_sec:02d}"
 
-        # Create detailed status message
+        # Create detailed status message based on what's available
         status_parts = []
-        if data["current_prefecture"]:
-            status_parts.append(f"Prefecture: {data['current_prefecture']}")
-        if data["current_line"]:
-            status_parts.append(f"Line: {data['current_line']}")
-        if data["stations_found"] > 0:
-            status_parts.append(f"Stations: {data['stations_found']}")
-        if data["duplicates_filtered"] > 0:
-            status_parts.append(f"Filtered: {data['duplicates_filtered']}")
 
-        status = " | ".join(status_parts) if status_parts else data["message"]
+        # Show prefecture progress
+        if data.get("prefectures_completed", 0) > 0 or data.get("current_prefecture"):
+            pref_progress = f"[{data.get('prefectures_completed', 0):2d}/47]"
+            if data.get("current_prefecture"):
+                status_parts.append(f"{pref_progress} {data['current_prefecture']}")
+            else:
+                status_parts.append(f"{pref_progress} Prefectures")
+
+        # Show current line if available
+        if data.get("current_line"):
+            status_parts.append(f"Line: {data['current_line']}")
+
+        # Show current station if available
+        if data.get("current_station"):
+            status_parts.append(f"Station: {data['current_station']}")
+
+        # If no specific status, use the message
+        if not status_parts and data.get("message"):
+            status_parts.append(data["message"])
+
+        status = " | ".join(status_parts) if status_parts else "Processing..."
+
+        # Calculate rate if we have enough data
+        rate_info = ""
+        if data["elapsed_time"] > 0 and data["stations_found"] > 0:
+            rate = (
+                data["stations_found"] / data["elapsed_time"] * 60
+            )  # stations per minute
+            rate_info = f" | [magenta]Rate: {rate:.1f}/min[/magenta]"
 
         # Update progress displays
         overall_progress.update(overall_task, description=f"[cyan]{status}[/cyan]")
         stats_progress.update(
             stats_task,
-            description=f"[green]Found: {data['stations_found']}[/green] | "
+            description=f"[green]Stations: {data['stations_found']}[/green] | "
             f"[yellow]Duplicates: {data['duplicates_filtered']}[/yellow] | "
-            f"[blue]Time: {time_str}[/blue] | "
+            f"[blue]Lines: {data['lines_completed']}[/blue] | "
+            f"[orange1]Time: {time_str}[/orange1]{rate_info} | "
             f"[red]Errors: {data['errors']}[/red]",
         )
 
@@ -131,7 +162,9 @@ def crawl_stations(output: str, timeout: int, resume: bool, state_file: str) -> 
         try:
             # Initialize crawler with progress callback
             crawler = StationCrawler(
-                timeout=timeout, progress_callback=update_progress_display
+                timeout=timeout,
+                progress_callback=update_progress_display,
+                max_lines_per_prefecture=max_lines,
             )
 
             # Determine resume parameters
@@ -144,16 +177,19 @@ def crawl_stations(output: str, timeout: int, resume: bool, state_file: str) -> 
 
             overall_progress.update(overall_task, description="Starting crawl...")
 
-            # Start crawling with resume capability
-            stations = crawler.crawl_all_stations(
-                resume_from_csv=resume_csv, state_file=resume_state
+            # Start crawling with resume capability (with incremental CSV writing)
+            crawler.crawl_all_stations(
+                resume_from_csv=resume_csv,
+                state_file=resume_state,
+                output_path=output_path,
             )
 
-            overall_progress.update(overall_task, description="Saving final results...")
+            overall_progress.update(
+                overall_task, description="[green]Crawl completed![/green]"
+            )
 
-            # Save final results (if not using incremental saves)
-            if not resume or not output_path.exists():
-                crawler.save_to_csv(stations, output_path)
+            # Incremental CSV writing is handled automatically during crawling
+            # Final results are already saved to CSV file
 
             overall_progress.update(
                 overall_task, description="[green]Crawl completed![/green]"
@@ -255,14 +291,16 @@ def search_stations(
             header_style="bold magenta",
         )
         table.add_column("Name", style="cyan", no_wrap=True)
+        table.add_column("Station Code", style="yellow", no_wrap=True)
+        table.add_column("Line Name", style="blue")
         table.add_column("Prefecture", style="green")
-        table.add_column("Railway Company", style="blue")
 
         for station in results:
             table.add_row(
                 station.name,
+                str(station.station_id) if station.station_id else "",
+                station.line_name or "",
                 station.prefecture or "",
-                station.railway_company or "",
             )
 
         console.print(table)
@@ -392,14 +430,16 @@ def list_stations(
                 header_style="bold magenta",
             )
             table.add_column("Name", style="cyan", no_wrap=True)
+            table.add_column("Station Code", style="yellow", no_wrap=True)
+            table.add_column("Line Name", style="blue")
             table.add_column("Prefecture", style="green")
-            table.add_column("Railway Company", style="blue")
 
             for station in filtered_stations:
                 table.add_row(
                     station.name,
+                    str(station.station_id) if station.station_id else "",
+                    station.line_name or "",
                     station.prefecture or "",
-                    station.railway_company or "",
                 )
 
             console.print(table)

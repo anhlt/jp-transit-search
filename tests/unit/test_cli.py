@@ -77,7 +77,7 @@ class TestCLI:
             to_station="豊洲",
             search_datetime=None,
             search_type="earliest",
-            save_html_path=None
+            save_html_path=None,
         )
 
     @patch("jp_transit_search.cli.main.YahooTransitScraper")
@@ -148,7 +148,7 @@ class TestCLI:
             to_station="豊洲",
             search_datetime=None,
             search_type="earliest",
-            save_html_path=None
+            save_html_path=None,
         )
 
     @patch("jp_transit_search.cli.main.YahooTransitScraper")

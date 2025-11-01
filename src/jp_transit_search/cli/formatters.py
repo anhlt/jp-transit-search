@@ -54,7 +54,9 @@ def format_route_table(routes: Route | list[Route], verbose: bool = False) -> No
                 transfer_table.add_column("Duration", style="green")
                 transfer_table.add_column("Cost", style="green")
                 transfer_table.add_column("Platform", style="blue")
-                if verbose:  # Only show riding position in verbose mode to avoid cluttering
+                if (
+                    verbose
+                ):  # Only show riding position in verbose mode to avoid cluttering
                     transfer_table.add_column("Riding Position", style="dim blue")
 
                 for transfer in route.transfers:
@@ -152,7 +154,9 @@ def format_route_detailed(routes: Route | list[Route]) -> None:
 
                 # Add riding position information if available
                 if transfer.riding_position:
-                    transfer_text += f"\n[bold]Riding Position:[/bold] {transfer.riding_position}"
+                    transfer_text += (
+                        f"\n[bold]Riding Position:[/bold] {transfer.riding_position}"
+                    )
 
                 # Add intermediate stations if available
                 if transfer.intermediate_stations:

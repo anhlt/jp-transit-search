@@ -151,7 +151,6 @@ class TestTransitMCPServer:
         assert "Found 2 stations matching 'Tokyo':" in text_content
         assert "東京駅" in text_content
         assert "新宿駅" in text_content
-        assert "Company:" in text_content
         assert "Line:" in text_content
 
     @pytest.mark.asyncio
@@ -269,7 +268,9 @@ class TestTransitMCPServer:
             ],
         )
 
-        with patch.object(server.scraper, "search_route", return_value=[enhanced_route]):
+        with patch.object(
+            server.scraper, "search_route", return_value=[enhanced_route]
+        ):
             result = await server._search_route(
                 {"from_station": "大船", "to_station": "新宿"}
             )

@@ -241,13 +241,17 @@ class TransitMCPServer:
                         result_text += f"     {t_i}. {transfer.from_station} → {transfer.to_station}"
                         if transfer.line_name:
                             result_text += f" ({transfer.line_name})"
-                        result_text += f" - {transfer.duration_minutes}min - ¥{transfer.cost_yen}"
+                        result_text += (
+                            f" - {transfer.duration_minutes}min - ¥{transfer.cost_yen}"
+                        )
 
                         # Add platform information if available
                         if transfer.departure_platform or transfer.arrival_platform:
                             platform_info = []
                             if transfer.departure_platform:
-                                platform_info.append(f"From: {transfer.departure_platform}")
+                                platform_info.append(
+                                    f"From: {transfer.departure_platform}"
+                                )
                             if transfer.arrival_platform:
                                 platform_info.append(f"To: {transfer.arrival_platform}")
                             result_text += f" | Platform: {' | '.join(platform_info)}"
@@ -301,10 +305,10 @@ class TransitMCPServer:
 
             for i, station in enumerate(stations, 1):
                 result_text += f"{i}. **{station.name}**"
+                if station.station_id:
+                    result_text += f" (Code: {station.station_id})"
                 if station.prefecture:
                     result_text += f" - {station.prefecture}"
-                if station.railway_company:
-                    result_text += f"\n   Company: {station.railway_company}"
                 if station.line_name:
                     result_text += f"\n   Line: {station.line_name}"
                 result_text += "\n\n"
@@ -351,14 +355,17 @@ class TransitMCPServer:
 
             result_text = f"**{station.name}**\n\n"
 
+            if station.station_id:
+                result_text += f"• **Station Code:** {station.station_id}\n"
+
             if station.prefecture:
                 result_text += f"• **Prefecture:** {station.prefecture}\n"
 
-            if station.railway_company:
-                result_text += f"• **Company:** {station.railway_company}\n"
-
             if station.line_name:
                 result_text += f"• **Line:** {station.line_name}\n"
+
+            if station.railway_company:
+                result_text += f"• **Company:** {station.railway_company}\n"
 
             if station.line_type:
                 result_text += f"• **Line Type:** {station.line_type}\n"
@@ -431,10 +438,10 @@ class TransitMCPServer:
 
             for i, station in enumerate(stations, 1):
                 result_text += f"{i}. **{station.name}**"
+                if station.station_id:
+                    result_text += f" (Code: {station.station_id})"
                 if station.prefecture:
                     result_text += f" - {station.prefecture}"
-                if station.railway_company:
-                    result_text += f"\n   Company: {station.railway_company}"
                 if station.line_name:
                     result_text += f"\n   Line: {station.line_name}"
                 result_text += "\n\n"

@@ -353,7 +353,12 @@ class TestStationDetailExtraction:
     def test_get_station_details_from_real_html(self):
         """Test station detail extraction using real Yahoo Transit HTML."""
         # Load the actual HTML sample
-        html_path = Path(__file__).parent.parent / "fixtures" / "station_pages" / "station_20042_yamanose_line.html"
+        html_path = (
+            Path(__file__).parent.parent
+            / "fixtures"
+            / "station_pages"
+            / "station_20042_yamanose_line.html"
+        )
 
         with open(html_path, encoding="utf-8") as f:
             html_content = f.read()
@@ -365,7 +370,7 @@ class TestStationDetailExtraction:
         mock_response.status_code = 200
         mock_response.text = html_content
 
-        with patch.object(crawler.session, 'get', return_value=mock_response):
+        with patch.object(crawler.session, "get", return_value=mock_response):
             details = crawler._get_station_details("/station/20042")
 
         # Test extracted data against known values from HTML
@@ -377,11 +382,18 @@ class TestStationDetailExtraction:
 
         # Should find some line information in the HTML
         # The HTML contains "札幌市電内回り" and "札幌市電外回り"
-        assert len(details.all_lines) > 0, "Should extract at least some line information"
+        assert len(details.all_lines) > 0, (
+            "Should extract at least some line information"
+        )
 
     def test_extract_station_name_and_reading(self):
         """Test extraction of station name and reading from HTML structure."""
-        html_path = Path(__file__).parent.parent / "fixtures" / "station_pages" / "station_20042_yamanose_line.html"
+        html_path = (
+            Path(__file__).parent.parent
+            / "fixtures"
+            / "station_pages"
+            / "station_20042_yamanose_line.html"
+        )
 
         with open(html_path, encoding="utf-8") as f:
             html_content = f.read()
@@ -406,7 +418,12 @@ class TestStationDetailExtraction:
 
     def test_extract_company_and_line_info(self):
         """Test extraction of railway company and line information."""
-        html_path = Path(__file__).parent.parent / "fixtures" / "station_pages" / "station_20042_yamanose_line.html"
+        html_path = (
+            Path(__file__).parent.parent
+            / "fixtures"
+            / "station_pages"
+            / "station_20042_yamanose_line.html"
+        )
 
         with open(html_path, encoding="utf-8") as f:
             html_content = f.read()
@@ -427,17 +444,25 @@ class TestStationDetailExtraction:
         assert len(script_tags) > 0, "Should contain JSON data script"
 
         import json
+
         json_data = json.loads(script_tags[0].string)
 
         # Extract company and line info from JSON
-        transport_info = json_data["props"]["pageProps"]["lipFeature"]["TransitSearchInfo"]["Detail"]
+        transport_info = json_data["props"]["pageProps"]["lipFeature"][
+            "TransitSearchInfo"
+        ]["Detail"]
         assert transport_info["CompanyName"] == "札幌市交通事業振興公社"
         assert transport_info["RailName"] == "山鼻線"
         assert transport_info["StationId"] == "20042"
 
     def test_prefecture_extraction_from_url_params(self):
         """Test prefecture extraction from URL parameters."""
-        html_path = Path(__file__).parent.parent / "fixtures" / "station_pages" / "station_20042_yamanose_line.html"
+        html_path = (
+            Path(__file__).parent.parent
+            / "fixtures"
+            / "station_pages"
+            / "station_20042_yamanose_line.html"
+        )
 
         with open(html_path, encoding="utf-8") as f:
             f.read()  # Just read to verify file exists
@@ -449,9 +474,11 @@ class TestStationDetailExtraction:
         hokkaido_url = "https://transit.yahoo.co.jp/station/01/test"
         prefecture = crawler._get_prefecture_from_url(hokkaido_url)
         # Now correctly handles Hokkaido prefecture mapping
-        assert prefecture == "北海道"  # Enhanced implementation now handles all 47 prefectures
+        assert (
+            prefecture == "北海道"
+        )  # Enhanced implementation now handles all 47 prefectures
 
-    @patch('time.sleep')  # Mock sleep to speed up tests
+    @patch("time.sleep")  # Mock sleep to speed up tests
     def test_station_id_extraction_from_url(self, mock_sleep):
         """Test station ID extraction from URL patterns."""
         crawler = StationCrawler()
@@ -460,7 +487,7 @@ class TestStationDetailExtraction:
         test_urls = [
             "https://transit.yahoo.co.jp/station/20042",
             "/station/20042?pref=1&company=test",
-            "https://transit.yahoo.co.jp/station/12345/info"
+            "https://transit.yahoo.co.jp/station/12345/info",
         ]
 
         expected_ids = ["20042", "20042", "12345"]
@@ -471,14 +498,19 @@ class TestStationDetailExtraction:
             mock_response.status_code = 200
             mock_response.text = "<html><body>Test</body></html>"
 
-            with patch.object(crawler.session, 'get', return_value=mock_response):
+            with patch.object(crawler.session, "get", return_value=mock_response):
                 details = crawler._get_station_details(url)
                 assert details.station_id == expected_id
 
     def test_get_station_details_higashi_tonden_dori(self):
         """Test station detail extraction using station 20470 (東屯田通駅) HTML."""
         # Load the actual HTML sample for station 20470
-        html_path = Path(__file__).parent.parent / "fixtures" / "station_pages" / "station_20470_sapporo_line.html"
+        html_path = (
+            Path(__file__).parent.parent
+            / "fixtures"
+            / "station_pages"
+            / "station_20470_sapporo_line.html"
+        )
 
         with open(html_path, encoding="utf-8") as f:
             html_content = f.read()
@@ -490,7 +522,7 @@ class TestStationDetailExtraction:
         mock_response.status_code = 200
         mock_response.text = html_content
 
-        with patch.object(crawler.session, 'get', return_value=mock_response):
+        with patch.object(crawler.session, "get", return_value=mock_response):
             details = crawler._get_station_details("/station/20470")
 
         # Test extracted data against known values from HTML
@@ -517,7 +549,12 @@ class TestStationDetailExtraction:
     def test_get_station_details_meguro_multi_lines(self):
         """Test station detail extraction using station 23018 (目黒駅) HTML - multi-line major station."""
         # Load the actual HTML sample for station 23018
-        html_path = Path(__file__).parent.parent / "fixtures" / "station_pages" / "station_23018_tokyu_meguro_line.html"
+        html_path = (
+            Path(__file__).parent.parent
+            / "fixtures"
+            / "station_pages"
+            / "station_23018_tokyu_meguro_line.html"
+        )
 
         with open(html_path, encoding="utf-8") as f:
             html_content = f.read()
@@ -529,7 +566,7 @@ class TestStationDetailExtraction:
         mock_response.status_code = 200
         mock_response.text = html_content
 
-        with patch.object(crawler.session, 'get', return_value=mock_response):
+        with patch.object(crawler.session, "get", return_value=mock_response):
             details = crawler._get_station_details("/station/23018")
 
         # Test extracted data against known values from HTML
@@ -549,10 +586,12 @@ class TestStationDetailExtraction:
             "ＪＲ山手線内回り",
             "東急目黒線",
             "東京メトロ南北線",
-            "都営地下鉄三田線"
+            "都営地下鉄三田線",
         ]
         for expected_line in expected_lines:
-            assert expected_line in details.all_lines, f"Expected line '{expected_line}' not found in {details.all_lines}"
+            assert expected_line in details.all_lines, (
+                f"Expected line '{expected_line}' not found in {details.all_lines}"
+            )
 
         # Verify company name extraction (should pick up from JSON - Tokyo Metro in this case)
         assert details.company_name == "東京地下鉄"
@@ -563,7 +602,12 @@ class TestStationDetailExtraction:
     def test_get_station_details_denenchofu_tokyu_lines(self):
         """Test station detail extraction using station 22826 (田園調布駅) HTML - Tokyu multi-line station."""
         # Load the actual HTML sample for station 22826
-        html_path = Path(__file__).parent.parent / "fixtures" / "station_pages" / "station_22826_tokyu_meguro_line.html"
+        html_path = (
+            Path(__file__).parent.parent
+            / "fixtures"
+            / "station_pages"
+            / "station_22826_tokyu_meguro_line.html"
+        )
 
         with open(html_path, encoding="utf-8") as f:
             html_content = f.read()
@@ -575,7 +619,7 @@ class TestStationDetailExtraction:
         mock_response.status_code = 200
         mock_response.text = html_content
 
-        with patch.object(crawler.session, 'get', return_value=mock_response):
+        with patch.object(crawler.session, "get", return_value=mock_response):
             details = crawler._get_station_details("/station/22826")
 
         # Test extracted data against known values from HTML
@@ -590,12 +634,11 @@ class TestStationDetailExtraction:
         assert len(details.all_lines) == 2
 
         # Verify specific lines are extracted (both Tokyu lines)
-        expected_lines = [
-            "東急東横線",
-            "東急目黒線"
-        ]
+        expected_lines = ["東急東横線", "東急目黒線"]
         for expected_line in expected_lines:
-            assert expected_line in details.all_lines, f"Expected line '{expected_line}' not found in {details.all_lines}"
+            assert expected_line in details.all_lines, (
+                f"Expected line '{expected_line}' not found in {details.all_lines}"
+            )
 
         # Verify company name extraction (should be Tokyu Corporation)
         assert details.company_name == "東急電鉄"
@@ -606,7 +649,12 @@ class TestStationDetailExtraction:
     def test_get_station_details_shibuya_jr_yamanote(self):
         """Test station detail extraction using station 22715 (渋谷駅) HTML - Japan's busiest interchange."""
         # Load the actual HTML sample for station 22715
-        html_path = Path(__file__).parent.parent / "fixtures" / "station_pages" / "station_22715_shibuya_jr_yamanote.html"
+        html_path = (
+            Path(__file__).parent.parent
+            / "fixtures"
+            / "station_pages"
+            / "station_22715_shibuya_jr_yamanote.html"
+        )
 
         with open(html_path, encoding="utf-8") as f:
             html_content = f.read()
@@ -618,7 +666,7 @@ class TestStationDetailExtraction:
         mock_response.status_code = 200
         mock_response.text = html_content
 
-        with patch.object(crawler.session, 'get', return_value=mock_response):
+        with patch.object(crawler.session, "get", return_value=mock_response):
             details = crawler._get_station_details("/station/22715")
 
         # Test extracted data against known values from HTML
@@ -642,10 +690,12 @@ class TestStationDetailExtraction:
             "京王井の頭線",
             "東京メトロ銀座線",
             "東京メトロ半蔵門線",
-            "東京メトロ副都心線"
+            "東京メトロ副都心線",
         ]
         for expected_line in expected_lines:
-            assert expected_line in details.all_lines, f"Expected line '{expected_line}' not found in {details.all_lines}"
+            assert expected_line in details.all_lines, (
+                f"Expected line '{expected_line}' not found in {details.all_lines}"
+            )
 
         # Verify company name extraction (should be Tokyu - the primary operator in JSON)
         assert details.company_name == "東急電鉄"
@@ -656,7 +706,12 @@ class TestStationDetailExtraction:
     def test_get_station_details_hiroshima_astram_line(self):
         """Test station detail extraction using station 27244 (紙屋町東駅) HTML - Hiroshima Astram Line monorail."""
         # Load the actual HTML sample for station 27244
-        html_path = Path(__file__).parent.parent / "fixtures" / "station_pages" / "station_27244_hiroshima_astram.html"
+        html_path = (
+            Path(__file__).parent.parent
+            / "fixtures"
+            / "station_pages"
+            / "station_27244_hiroshima_astram.html"
+        )
 
         with open(html_path, encoding="utf-8") as f:
             html_content = f.read()
@@ -668,7 +723,7 @@ class TestStationDetailExtraction:
         mock_response.status_code = 200
         mock_response.text = html_content
 
-        with patch.object(crawler.session, 'get', return_value=mock_response):
+        with patch.object(crawler.session, "get", return_value=mock_response):
             details = crawler._get_station_details("/station/27244")
 
         # Test extracted data against known values from HTML

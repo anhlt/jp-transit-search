@@ -158,12 +158,14 @@ class StationCrawler:
         self,
         timeout: int = 30,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        max_lines_per_prefecture: int | None = None,
     ):
         """Initialize the station crawler.
 
         Args:
             timeout: Request timeout in seconds
             progress_callback: Optional callback for progress updates
+            max_lines_per_prefecture: Maximum lines to crawl per prefecture (None for no limit)
         """
         self.timeout = timeout
         self.session = requests.Session()
@@ -173,26 +175,33 @@ class StationCrawler:
             }
         )
         self.stations: list[Station] = []
-        self.existing_stations: set[tuple[str, str | None]] = set()  # For deduplication
+        self.existing_stations: set[str] = set()  # For deduplication by station_id
         self.progress = CrawlingProgress()
         self.progress_callback = progress_callback
         self.state_file: Path | None = None
+        self.output_path: Path | None = None
         self.checkpoint_interval = 50  # Save progress every 50 stations
+        self.max_lines_per_prefecture = max_lines_per_prefecture
 
     def crawl_all_stations(
-        self, resume_from_csv: Path | None = None, state_file: Path | None = None
+        self,
+        resume_from_csv: Path | None = None,
+        state_file: Path | None = None,
+        output_path: Path | None = None,
     ) -> list[Station]:
         """Crawl station data from multiple sources with resume capability.
 
         Args:
             resume_from_csv: Path to existing CSV file to resume from
             state_file: Path to state file for tracking progress
+            output_path: Path to output CSV file for incremental writing
 
         Returns:
             List of Station objects
         """
         logger.info("Starting resumable station data crawl")
         self.state_file = state_file
+        self.output_path = output_path
 
         # Load existing stations for deduplication
         if resume_from_csv and resume_from_csv.exists():
@@ -200,6 +209,12 @@ class StationCrawler:
             logger.info(
                 f"Loaded {len(self.existing_stations)} existing stations for deduplication"
             )
+        elif output_path and output_path.exists():
+            # If starting fresh but output file exists, clear it
+            logger.info(
+                f"Starting fresh crawl, clearing existing output file: {output_path}"
+            )
+            output_path.unlink()
 
         # Load previous progress state
         crawl_state = self._load_crawl_state()
@@ -373,7 +388,11 @@ class StationCrawler:
         """
         try:
             existing_stations = self.load_from_csv(csv_path)
-            self.existing_stations = {(s.name, s.prefecture) for s in existing_stations}
+            # Use station_id for deduplication, fallback to name+prefecture if no ID
+            self.existing_stations = {
+                s.station_id if s.station_id else f"{s.name}_{s.prefecture}"
+                for s in existing_stations
+            }
         except Exception as e:
             logger.warning(f"Failed to load existing stations: {e}")
             self.existing_stations = set()
@@ -425,32 +444,47 @@ class StationCrawler:
             logger.warning(f"Failed to load crawl state: {e}")
             return CrawlState()
 
-    def _update_progress(self, message: str, increment_stations: int = 0) -> None:
+    def _update_progress(
+        self, message: str, increment_stations: int = 0, station_name: str | None = None
+    ) -> None:
         """Update progress and notify callback.
 
         Args:
             message: Progress message
             increment_stations: Number of stations to add to count
+            station_name: Name of station being processed (for detailed logging)
         """
         if increment_stations > 0:
             self.progress.stations_found += increment_stations
 
-        if self.progress_callback:
-            self.progress_callback(
-                {
-                    "message": message,
-                    "stations_found": self.progress.stations_found,
-                    "duplicates_filtered": self.progress.duplicates_filtered,
-                    "prefectures_completed": self.progress.prefectures_completed,
-                    "lines_completed": self.progress.lines_completed,
-                    "current_prefecture": self.progress.current_prefecture,
-                    "current_line": self.progress.current_line,
-                    "errors": self.progress.errors,
-                    "elapsed_time": (
-                        datetime.now() - self.progress.start_time
-                    ).total_seconds(),
-                }
+        elapsed = (datetime.now() - self.progress.start_time).total_seconds()
+        progress_info = {
+            "message": message,
+            "stations_found": self.progress.stations_found,
+            "duplicates_filtered": self.progress.duplicates_filtered,
+            "prefectures_completed": self.progress.prefectures_completed,
+            "lines_completed": self.progress.lines_completed,
+            "current_prefecture": self.progress.current_prefecture,
+            "current_line": self.progress.current_line,
+            "errors": self.progress.errors,
+            "elapsed_time": elapsed,
+        }
+
+        if station_name:
+            progress_info["current_station"] = station_name
+
+        # Always log progress to console for visibility
+        if station_name:
+            logger.info(
+                f"[{self.progress.prefectures_completed + 1:2d}/47] {self.progress.current_prefecture} | {self.progress.current_line} | Found: {station_name} | Total: {self.progress.stations_found}"
             )
+        else:
+            logger.info(
+                f"[{elapsed:6.1f}s] {message} | Stations: {self.progress.stations_found} | Errors: {self.progress.errors} | Duplicates: {self.progress.duplicates_filtered}"
+            )
+
+        if self.progress_callback:
+            self.progress_callback(progress_info)
 
     def _checkpoint_save(
         self, stations_batch: list[Station], output_path: Path
@@ -458,40 +492,28 @@ class StationCrawler:
         """Save a batch of stations and update progress.
 
         Args:
-            stations_batch: Batch of stations to save
+            stations_batch: Batch of stations to save (already deduplicated)
             output_path: CSV file path to append to
         """
         if not stations_batch:
             return
 
-        # Filter out duplicates before saving
-        new_stations = []
-        for station in stations_batch:
-            key = (station.name, station.prefecture)
-            if key not in self.existing_stations:
-                new_stations.append(station)
-                self.existing_stations.add(key)
-            else:
-                self.progress.duplicates_filtered += 1
-
-        if new_stations:
-            self.append_to_csv(new_stations, output_path)
-            self._update_progress(
-                f"Saved {len(new_stations)} new stations (filtered {len(stations_batch) - len(new_stations)} duplicates)",
-                increment_stations=len(new_stations),
-            )
+        # Stations in the batch are already deduplicated during parsing, so just save them
+        self.append_to_csv(stations_batch, output_path)
+        self._update_progress(
+            f"Saved {len(stations_batch)} stations to CSV",
+        )
 
     def _crawl_yahoo_transit_stations_resumable(self, crawl_state: CrawlState) -> None:
         """Crawl station data from Yahoo Transit with resume capability."""
         logger.info("Crawling Yahoo Transit station data (resumable)")
 
-        # Crawl Tokyo prefecture (13) - can expand to other prefectures
+        # Generate all 47 prefectures from the mapping
         prefectures_to_crawl = [
-            {"code": "13", "name": "東京都"},
-            {"code": "14", "name": "神奈川県"},
-            {"code": "11", "name": "埼玉県"},
-            {"code": "12", "name": "千葉県"},
+            {"code": code, "name": name} for name, code in PREFECTURE_ID_MAPPING.items()
         ]
+        # Sort by code to ensure consistent order
+        prefectures_to_crawl.sort(key=lambda x: x["code"])
 
         completed_prefectures = set(crawl_state.completed_prefectures)
         start_index = crawl_state.current_prefecture_index or 0
@@ -504,11 +526,17 @@ class StationCrawler:
                 continue
 
             self.progress.current_prefecture = pref["name"]
-            self._update_progress(f"Starting prefecture: {pref['name']}")
+            self._update_progress(
+                f"[{i + 1:2d}/47] Starting prefecture: {pref['name']} (Code: {pref['code']})"
+            )
 
             try:
+                pref_stations_before = self.progress.stations_found
                 self._crawl_prefecture_stations_resumable(
                     pref["code"], pref["name"], crawl_state
+                )
+                pref_stations_added = (
+                    self.progress.stations_found - pref_stations_before
                 )
 
                 # Mark prefecture as completed
@@ -517,13 +545,17 @@ class StationCrawler:
                 crawl_state.current_prefecture_index = i + 1
                 self.progress.prefectures_completed += 1
 
+                self._update_progress(
+                    f"[{i + 1:2d}/47] Completed prefecture: {pref['name']} ({pref_stations_added} stations added)"
+                )
+
                 # Save state after each prefecture
                 self._save_crawl_state(crawl_state)
 
             except Exception as e:
                 self.progress.errors += 1
                 self._update_progress(f"Failed to crawl {pref['name']}: {e}")
-                logger.warning(f"Failed to crawl {pref['name']} stations: {e}")
+                logger.error(f"Failed to crawl {pref['name']} stations: {e}")
                 continue
 
     @retry(
@@ -544,8 +576,10 @@ class StationCrawler:
             pref_name: Prefecture name (e.g., '東京都')
             crawl_state: Current crawling state
         """
-        pref_url = f"https://transit.yahoo.co.jp/station/pref/{pref_code}"
-        logger.info(f"Crawling {pref_name} prefecture: {pref_url}")
+        # Remove leading zero for URL (Yahoo uses 1, 2, 3... not 01, 02, 03...)
+        pref_code_for_url = str(int(pref_code))
+        pref_url = f"https://transit.yahoo.co.jp/station/pref/{pref_code_for_url}"
+        logger.info(f"Fetching prefecture page: {pref_url}")
 
         try:
             response = self.session.get(pref_url, timeout=self.timeout)
@@ -560,20 +594,33 @@ class StationCrawler:
                 text = link.get_text().strip()
 
                 # Look for line links in format /station/{pref_code}/{company}/{line}
-                if f"/station/{pref_code}/" in href and ("線" in text or "JR" in text):
+                # Use unpadded code for URL matching
+                if f"/station/{pref_code_for_url}/" in href and (
+                    "線" in text or "JR" in text
+                ):
                     full_url = f"https://transit.yahoo.co.jp{href}"
                     line_links.append((text, full_url))
 
-            logger.info(f"Found {len(line_links)} railway lines in {pref_name}")
+            limit_msg = (
+                f" (limited to {self.max_lines_per_prefecture})"
+                if self.max_lines_per_prefecture
+                else ""
+            )
+            logger.info(
+                f"Found {len(line_links)} railway lines in {pref_name}{limit_msg}"
+            )
 
             # Get completed lines for this prefecture
             pref_key = f"{pref_code}_{pref_name}"
             completed_lines = set(crawl_state.completed_lines.get(pref_key, []))
 
-            stations_batch = []
+            stations_batch: list[Station] = []
 
-            # Crawl each line (limit to first 20 lines to avoid overwhelming)
-            for line_name, line_url in line_links[:20]:
+            # Crawl each line (with configurable limit)
+            if self.max_lines_per_prefecture is not None:
+                line_links = line_links[: self.max_lines_per_prefecture]
+
+            for line_idx, (line_name, line_url) in enumerate(line_links, 1):
                 line_key = f"{line_name}_{line_url}"
 
                 if line_key in completed_lines:
@@ -581,13 +628,16 @@ class StationCrawler:
                     continue
 
                 self.progress.current_line = line_name
-                self._update_progress(f"Crawling line: {line_name}")
+                self._update_progress(
+                    f"[{line_idx:2d}/{len(line_links)}] Crawling line: {line_name}"
+                )
 
                 try:
                     line_stations = self._parse_yahoo_line_page_resumable(
                         line_url, line_name, pref_name
                     )
                     stations_batch.extend(line_stations)
+                    line_stations_added = len(line_stations)
 
                     # Mark line as completed
                     completed_lines.add(line_key)
@@ -596,11 +646,23 @@ class StationCrawler:
                     crawl_state.completed_lines[pref_key] = list(completed_lines)
                     self.progress.lines_completed += 1
 
+                    # Update progress for completed line (stations already counted individually)
+                    self._update_progress(
+                        f"[{line_idx:2d}/{len(line_links)}] Completed line: {line_name} ({line_stations_added} stations)"
+                    )
+
+                    logger.info(
+                        f"[{line_idx:2d}/{len(line_links)}] Line: {line_name} → {line_stations_added} stations"
+                    )
+
                     # Checkpoint save every batch or when reaching checkpoint interval
                     if len(stations_batch) >= self.checkpoint_interval:
                         self._update_progress(
                             f"Checkpoint: saving {len(stations_batch)} stations"
                         )
+                        # Write batch to CSV if output path is provided
+                        if self.output_path:
+                            self._checkpoint_save(stations_batch, self.output_path)
                         self.stations.extend(stations_batch)
                         stations_batch = []
                         self._save_crawl_state(crawl_state)
@@ -611,11 +673,14 @@ class StationCrawler:
                 except Exception as e:
                     self.progress.errors += 1
                     self._update_progress(f"Failed to crawl line {line_name}: {e}")
-                    logger.warning(f"Failed to crawl line {line_name}: {e}")
+                    logger.error(f"Failed to crawl line {line_name}: {e}")
                     continue
 
             # Save any remaining stations
             if stations_batch:
+                # Write final batch to CSV if output path is provided
+                if self.output_path:
+                    self._checkpoint_save(stations_batch, self.output_path)
                 self.stations.extend(stations_batch)
                 self._update_progress(
                     f"Final batch: saved {len(stations_batch)} stations"
@@ -686,10 +751,15 @@ class StationCrawler:
                 station_details = self._get_station_details(station_href)
 
                 # Create station with comprehensive line information
+                # Ensure prefecture_id is set if not in station_details
+                prefecture_id = station_details.prefecture_id
+                if not prefecture_id and station_prefecture:
+                    prefecture_id = PREFECTURE_ID_MAPPING.get(station_prefecture)
+
                 station = Station(
                     name=station_name,
                     prefecture=station_prefecture,
-                    prefecture_id=station_details.prefecture_id,
+                    prefecture_id=prefecture_id,
                     station_id=station_details.station_id,
                     railway_company=railway_company,
                     line_name=line_name,
@@ -749,15 +819,36 @@ class StationCrawler:
                         station_links.append((text, href))
 
             # Extract detailed station information
-            for station_name, station_href in station_links:
+            for _station_idx, (station_name, station_href) in enumerate(
+                station_links, 1
+            ):
                 if station_name in stations_found:
                     continue  # Skip duplicates
 
-                # Check if this station already exists
-                station_key = (station_name, prefecture)
+                # Extract station ID from href for deduplication
+                import re
+
+                station_id = None
+                if "/station/" in station_href:
+                    station_id_match = re.search(r"/station/(\d+)", station_href)
+                    if station_id_match:
+                        station_id = station_id_match.group(1)
+
+                # Check if this station already exists (use station_id if available, otherwise name+prefecture)
+                if station_id:
+                    station_key = station_id
+                else:
+                    station_key = f"{station_name}_{prefecture}"
+
                 if station_key in self.existing_stations:
                     self.progress.duplicates_filtered += 1
+                    logger.debug(
+                        f"Skipping duplicate station: {station_name} (ID: {station_id or 'None'}) ({prefecture})"
+                    )
                     continue
+
+                # Add to existing stations set for future duplicate checking
+                self.existing_stations.add(station_key)
 
                 stations_found.append(station_name)
 
@@ -774,11 +865,19 @@ class StationCrawler:
                 station_details = self._get_station_details(station_href)
 
                 # Create station with comprehensive line information
+                # Ensure prefecture_id is set if not in station_details
+                prefecture_id = station_details.prefecture_id
+                if not prefecture_id and station_prefecture:
+                    prefecture_id = PREFECTURE_ID_MAPPING.get(station_prefecture)
+
+                # Use station_id extracted from href if station_details doesn't have it
+                final_station_id = station_details.station_id or station_id
+
                 station = Station(
                     name=station_name,
                     prefecture=station_prefecture,
-                    prefecture_id=station_details.prefecture_id,
-                    station_id=station_details.station_id,
+                    prefecture_id=prefecture_id,
+                    station_id=final_station_id,
                     railway_company=railway_company,
                     line_name=line_name,
                     aliases=station_details.aliases or [],
@@ -788,6 +887,13 @@ class StationCrawler:
                 )
 
                 line_stations.append(station)
+
+                # Update progress with this newly processed station
+                self._update_progress(
+                    f"Found station: {station_name}",
+                    increment_stations=1,
+                    station_name=station_name,
+                )
 
             logger.info(f"Found {len(stations_found)} stations on {line_name}")
             return line_stations
@@ -832,6 +938,25 @@ class StationCrawler:
         details = StationDetails()
 
         try:
+            # Extract prefecture from URL and map to prefecture ID
+            prefecture_name = self._get_prefecture_from_url(station_href)
+            details.prefecture_id = PREFECTURE_ID_MAPPING.get(prefecture_name)
+
+            # Also try to extract from URL parameters if available
+            if "?" in station_href:
+                from urllib.parse import parse_qs, unquote, urlparse
+
+                parsed_url = urlparse(station_href)
+                params = parse_qs(parsed_url.query)
+
+                if "pref" in params and params["pref"][0]:
+                    # The pref parameter might contain prefecture code
+                    pref_code = params["pref"][0]
+                    # Find prefecture name by code
+                    for _pref_name, code in PREFECTURE_ID_MAPPING.items():
+                        if code == pref_code.zfill(2):  # Ensure 2-digit format
+                            details.prefecture_id = code
+                            break
             # Make full URL
             if station_href.startswith("/"):
                 station_url = f"https://transit.yahoo.co.jp{station_href}"
@@ -972,56 +1097,65 @@ class StationCrawler:
         Returns:
             Prefecture name
         """
-        # Yahoo uses prefecture codes: 01=Hokkaido, 13=Tokyo, 14=Kanagawa, etc.
-        prefecture_map = {
-            "/01/": "北海道",
-            "/02/": "青森県",
-            "/03/": "岩手県",
-            "/04/": "宮城県",
-            "/05/": "秋田県",
-            "/06/": "山形県",
-            "/07/": "福島県",
-            "/08/": "茨城県",
-            "/09/": "栃木県",
-            "/10/": "群馬県",
-            "/11/": "埼玉県",
-            "/12/": "千葉県",
-            "/13/": "東京都",
-            "/14/": "神奈川県",
-            "/15/": "新潟県",
-            "/16/": "富山県",
-            "/17/": "石川県",
-            "/18/": "福井県",
-            "/19/": "山梨県",
-            "/20/": "長野県",
-            "/21/": "岐阜県",
-            "/22/": "静岡県",
-            "/23/": "愛知県",
-            "/24/": "三重県",
-            "/25/": "滋賀県",
-            "/26/": "京都府",
-            "/27/": "大阪府",
-            "/28/": "兵庫県",
-            "/29/": "奈良県",
-            "/30/": "和歌山県",
-            "/31/": "鳥取県",
-            "/32/": "島根県",
-            "/33/": "岡山県",
-            "/34/": "広島県",
-            "/35/": "山口県",
-            "/36/": "徳島県",
-            "/37/": "香川県",
-            "/38/": "愛媛県",
-            "/39/": "高知県",
-            "/40/": "福岡県",
-            "/41/": "佐賀県",
-            "/42/": "長崎県",
-            "/43/": "熊本県",
-            "/44/": "大分県",
-            "/45/": "宮崎県",
-            "/46/": "鹿児島県",
-            "/47/": "沖縄県",
+        # Yahoo uses prefecture codes: 1=Hokkaido, 13=Tokyo, 14=Kanagawa, etc.
+        # Support both padded (/01/) and unpadded (/1/) formats
+        prefecture_map = {}
+
+        # Create mapping for both padded and unpadded codes
+        code_to_name = {
+            "1": "北海道",
+            "2": "青森県",
+            "3": "岩手県",
+            "4": "宮城県",
+            "5": "秋田県",
+            "6": "山形県",
+            "7": "福島県",
+            "8": "茨城県",
+            "9": "栃木県",
+            "10": "群馬県",
+            "11": "埼玉県",
+            "12": "千葉県",
+            "13": "東京都",
+            "14": "神奈川県",
+            "15": "新潟県",
+            "16": "富山県",
+            "17": "石川県",
+            "18": "福井県",
+            "19": "山梨県",
+            "20": "長野県",
+            "21": "岐阜県",
+            "22": "静岡県",
+            "23": "愛知県",
+            "24": "三重県",
+            "25": "滋賀県",
+            "26": "京都府",
+            "27": "大阪府",
+            "28": "兵庫県",
+            "29": "奈良県",
+            "30": "和歌山県",
+            "31": "鳥取県",
+            "32": "島根県",
+            "33": "岡山県",
+            "34": "広島県",
+            "35": "山口県",
+            "36": "徳島県",
+            "37": "香川県",
+            "38": "愛媛県",
+            "39": "高知県",
+            "40": "福岡県",
+            "41": "佐賀県",
+            "42": "長崎県",
+            "43": "熊本県",
+            "44": "大分県",
+            "45": "宮崎県",
+            "46": "鹿児島県",
+            "47": "沖縄県",
         }
+
+        # Add both formats to the map
+        for code, name in code_to_name.items():
+            prefecture_map[f"/{code}/"] = name
+            prefecture_map[f"/{code.zfill(2)}/"] = name  # Also support zero-padded
 
         for code, prefecture in prefecture_map.items():
             if code in url:
