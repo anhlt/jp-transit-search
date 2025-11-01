@@ -1,8 +1,10 @@
 """Tests for Japanese text processing utilities."""
 
+import threading
+
 import pytest
 
-from jp_transit_search.utils.japanese_text import JapaneseTextConverter
+from jp_transit_search.utils.japanese_text import JapaneseTextConverter, get_converter
 
 
 class TestJapaneseTextConverter:
@@ -237,3 +239,54 @@ class TestJapaneseTextConverter:
         assert converter.to_katakana(normalized) == variants["katakana"]
         assert converter.to_romaji(normalized) == variants["romaji"]
         assert normalized == variants["normalized"]
+
+
+class TestGetConverter:
+    """Test cases for the get_converter singleton function."""
+
+    def test_get_converter_returns_instance(self):
+        """Test that get_converter returns a valid instance."""
+        converter = get_converter()
+        assert isinstance(converter, JapaneseTextConverter)
+        assert converter._kks is not None
+
+    def test_get_converter_returns_same_instance(self):
+        """Test that get_converter returns the same instance on multiple calls."""
+        converter1 = get_converter()
+        converter2 = get_converter()
+        assert converter1 is converter2
+
+    def test_get_converter_thread_safety(self):
+        """Test that get_converter is thread-safe."""
+        # Reset the global converter to test initialization
+        import jp_transit_search.utils.japanese_text as jt_module
+
+        original_converter = jt_module._converter
+        jt_module._converter = None
+
+        try:
+            instances = []
+            barrier = threading.Barrier(10)
+
+            def get_instance():
+                # Synchronize all threads to start at the same time
+                barrier.wait()
+                instance = get_converter()
+                instances.append(instance)
+
+            # Create multiple threads that all try to get the converter at once
+            threads = [threading.Thread(target=get_instance) for _ in range(10)]
+
+            for thread in threads:
+                thread.start()
+
+            for thread in threads:
+                thread.join()
+
+            # All threads should get the same instance
+            assert len(instances) == 10
+            assert all(instance is instances[0] for instance in instances)
+        finally:
+            # Restore the original converter
+            jt_module._converter = original_converter
+

@@ -1,6 +1,7 @@
 """Japanese text processing utilities."""
 
 import re
+import threading
 
 import jaconv
 import pykakasi
@@ -61,15 +62,19 @@ class JapaneseTextConverter:
         return variants
 
 
-# Global converter instance
+# Global converter instance and lock for thread-safe initialization
 _converter: JapaneseTextConverter | None = None
+_converter_lock = threading.Lock()
 
 
 def get_converter() -> JapaneseTextConverter:
-    """Get a singleton instance of the Japanese text converter."""
+    """Get a thread-safe singleton instance of the Japanese text converter."""
     global _converter
     if _converter is None:
-        _converter = JapaneseTextConverter()
+        with _converter_lock:
+            # Double-check locking pattern to avoid race conditions
+            if _converter is None:
+                _converter = JapaneseTextConverter()
     return _converter
 
 
