@@ -9,8 +9,13 @@ class TestJapaneseTextConverter:
     """Test cases for JapaneseTextConverter class."""
 
     def test_init(self):
-        """Test converter initialization."""
+        """Test converter initialization with lazy loading."""
         converter = JapaneseTextConverter()
+        # _kks should be None initially (lazy initialization)
+        assert converter._kks is None
+
+        # After using it, it should be initialized
+        converter.to_hiragana("test")
         assert converter._kks is not None
 
     def test_to_hiragana_basic(self):

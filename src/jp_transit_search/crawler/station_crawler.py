@@ -1312,14 +1312,19 @@ class StationSearcher:
             results.extend(self.katakana_index.get(query, []))
             results.extend(self.romaji_index.get(query, []))
 
-            # Remove duplicates while preserving order using station IDs
-            seen_ids = set()
+            # Remove duplicates while preserving order using station identifiers
+            seen_stations = set()
             unique_results = []
             for station in results:
-                station_id = id(station)  # Use object id as unique identifier
-                if station_id not in seen_ids:
+                # Create unique identifier from station_id or fallback to name+line combination
+                unique_key = (
+                    station.station_id
+                    if station.station_id
+                    else f"{station.name}|{station.line_name}|{station.railway_company}"
+                )
+                if unique_key not in seen_stations:
                     unique_results.append(station)
-                    seen_ids.add(station_id)
+                    seen_stations.add(unique_key)
             return unique_results
 
         # Enhanced fuzzy search
@@ -1399,14 +1404,19 @@ class StationSearcher:
                     for station in term_to_stations[term]:
                         results_with_scores.append((station, score))
 
-        # Remove duplicates and sort by score using station IDs
-        seen_station_ids: set[int] = set()
+        # Remove duplicates and sort by score using station identifiers
+        seen_scored_stations: set[str] = set()
         scored_results: list[tuple[Station, int]] = []
         for station, score in results_with_scores:
-            station_id = id(station)  # Use object id as unique identifier
-            if station_id not in seen_station_ids:
+            # Create unique identifier from station_id or fallback to name+line combination
+            unique_key = (
+                station.station_id
+                if station.station_id
+                else f"{station.name}|{station.line_name}|{station.railway_company}"
+            )
+            if unique_key not in seen_scored_stations:
                 scored_results.append((station, score))
-                seen_station_ids.add(station_id)
+                seen_scored_stations.add(unique_key)
 
         # Sort by score (highest first) then by name
         scored_results.sort(key=lambda x: (-x[1], x[0].name))
@@ -1486,16 +1496,21 @@ class StationSearcher:
 
         # Build results with scores
         results: list[tuple[Station, int]] = []
-        seen: set[int] = set()
+        seen: set[str] = set()
 
         for match in fuzzy_matches:
             term, score = match[0], match[1]
             if score >= threshold:
                 for station in term_to_stations[term]:
-                    station_id = id(station)  # Use object id as unique identifier
-                    if station_id not in seen:
+                    # Create unique identifier from station_id or fallback to name+line combination
+                    unique_key = (
+                        station.station_id
+                        if station.station_id
+                        else f"{station.name}|{station.line_name}|{station.railway_company}"
+                    )
+                    if unique_key not in seen:
                         results.append((station, score))
-                        seen.add(station_id)
+                        seen.add(unique_key)
 
         # Sort by score and limit results
         results.sort(key=lambda x: -x[1])
