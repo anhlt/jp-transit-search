@@ -100,19 +100,25 @@ class TransitMCPServer:
                                 "type": "string",
                                 "description": "Destination station name (in Japanese or English)",
                             },
+                            "search_type": {
+                                "type": "string",
+                                "description": "Route search preference: 'earliest' (fastest), 'cheapest' (lowest cost), or 'easiest' (fewest transfers)",
+                                "enum": ["earliest", "cheapest", "easiest"],
+                                "default": "earliest",
+                            },
                         },
                         "required": ["from_station", "to_station"],
                     },
                 ),
                 Tool(
                     name="search_stations",
-                    description="Search for Japanese train stations by name or keyword",
+                    description="Search for Japanese train stations by name or keyword with fuzzy matching",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "Station name or search keyword",
+                                "description": "Station name or search keyword (supports romaji, kanji, hiragana, katakana)",
                             },
                             "limit": {
                                 "type": "integer",
@@ -120,6 +126,23 @@ class TransitMCPServer:
                                 "default": 10,
                                 "minimum": 1,
                                 "maximum": 100,
+                            },
+                            "fuzzy_threshold": {
+                                "type": "integer",
+                                "description": "Minimum fuzzy match score (0-100). Lower = more lenient matching",
+                                "default": 70,
+                                "minimum": 0,
+                                "maximum": 100,
+                            },
+                            "exact": {
+                                "type": "boolean",
+                                "description": "If true, perform exact matching only (disables fuzzy search)",
+                                "default": False,
+                            },
+                            "show_scores": {
+                                "type": "boolean",
+                                "description": "If true, include matching scores in results",
+                                "default": False,
                             },
                         },
                         "required": ["query"],
@@ -190,9 +213,23 @@ class TransitMCPServer:
         """Search for transit routes between stations."""
         from_station = arguments["from_station"]
         to_station = arguments["to_station"]
+        search_type = arguments.get("search_type", "earliest")
+
+        # Validate station names and warn about potential ambiguity
+        validation_warnings = []
+        if self._is_romaji_name(from_station):
+            validation_warnings.append(
+                f"Warning: '{from_station}' appears to be a romaji name. For better accuracy, consider using the Japanese name."
+            )
+        if self._is_romaji_name(to_station):
+            validation_warnings.append(
+                f"Warning: '{to_station}' appears to be a romaji name. For better accuracy, consider using the Japanese name."
+            )
 
         try:
-            routes = self.scraper.search_route(from_station, to_station)
+            routes = self.scraper.search_route(
+                from_station, to_station, search_type=search_type
+            )
 
             # Allow scraper to return either a single Route or a list of Route
             if isinstance(routes, Route):
@@ -222,7 +259,22 @@ class TransitMCPServer:
                 return [TextContent(type="text", text="No routes found")]
 
             # Build a human-readable summary for all found routes
-            result_text = f"**Found {len(routes_list)} routes from {from_station} to {to_station}:**\n\n"
+            result_text = ""
+
+            # Add validation warnings if any
+            if validation_warnings:
+                result_text += "⚠️  **Validation Warnings:**\n"
+                for warning in validation_warnings:
+                    result_text += f"   • {warning}\n"
+                result_text += "\n"
+
+            search_type_display = {
+                "earliest": "fastest",
+                "cheapest": "cheapest",
+                "easiest": "easiest (fewest transfers)",
+            }.get(search_type, search_type)
+
+            result_text += f"**Found {len(routes_list)} routes from {from_station} to {to_station}** ({search_type_display} preference):**\n\n"
 
             for idx, r in enumerate(routes_list, 1):
                 result_text += (
@@ -286,49 +338,86 @@ class TransitMCPServer:
         except (ValidationError, RouteNotFoundError, ScrapingError, NetworkError) as e:
             return [TextContent(type="text", text=f"Route search failed: {str(e)}")]
 
+    def _is_romaji_name(self, name: str) -> bool:
+        """Check if a station name appears to be in romaji (ASCII characters only)."""
+        return name.isascii() and name.isalpha()
+
     async def _search_stations(self, arguments: dict[str, Any]) -> list[TextContent]:
-        """Search for stations by name or keyword."""
+        """Search for stations by name or keyword with enhanced fuzzy matching."""
         query = arguments["query"]
         limit = arguments.get("limit", 10)
+        fuzzy_threshold = arguments.get("fuzzy_threshold", 70)
+        exact = arguments.get("exact", False)
+        show_scores = arguments.get("show_scores", False)
 
         try:
-            stations = self.station_searcher.search_stations(query, limit=limit)
+            if show_scores:
+                # Use fuzzy_search method that returns scores
+                station_scores = self.station_searcher.fuzzy_search(
+                    query, limit=limit, threshold=fuzzy_threshold
+                )
+                stations = [station for station, _score in station_scores]
+                scores = [score for _station, score in station_scores]
+            else:
+                # Use regular search methods
+                if exact:
+                    stations = self.station_searcher.search_by_name(query, exact=True)[
+                        :limit
+                    ]
+                else:
+                    stations = self.station_searcher.search_stations(
+                        query, limit=limit, fuzzy_threshold=fuzzy_threshold
+                    )
+                scores = None
 
             if not stations:
+                search_type = (
+                    "exact" if exact else f"fuzzy (threshold: {fuzzy_threshold})"
+                )
                 return [
                     TextContent(
-                        type="text", text=f"No stations found matching '{query}'"
+                        type="text",
+                        text=f"No stations found matching '{query}' with {search_type} search",
                     )
                 ]
 
-            result_text = f"**Found {len(stations)} stations matching '{query}':**\n\n"
+            # Build result text
+            search_type = "exact" if exact else f"fuzzy (threshold: {fuzzy_threshold})"
+            result_text = f"**Found {len(stations)} stations matching '{query}' ({search_type} search):**\n\n"
 
             for i, station in enumerate(stations, 1):
                 result_text += f"{i}. **{station.name}**"
+                if show_scores and scores:
+                    result_text += f" (Score: {scores[i - 1]}%)"
                 if station.station_id:
                     result_text += f" (Code: {station.station_id})"
                 if station.prefecture:
                     result_text += f" - {station.prefecture}"
                 if station.line_name:
                     result_text += f"\n   Line: {station.line_name}"
+                if station.name_romaji:
+                    result_text += f"\n   Romaji: {station.name_romaji}"
                 result_text += "\n\n"
 
             # Also return JSON data with enhanced fields
-            stations_data = [
-                {
+            stations_data = []
+            for i, s in enumerate(stations):
+                station_data = {
                     "name": s.name,
+                    "name_hiragana": s.name_hiragana,
+                    "name_katakana": s.name_katakana,
+                    "name_romaji": s.name_romaji,
                     "prefecture": s.prefecture,
                     "prefecture_id": s.prefecture_id,
                     "station_id": s.station_id,
                     "railway_company": s.railway_company,
                     "line_name": s.line_name,
                     "aliases": s.aliases,
-                    "line_type": s.line_type,
-                    "company_code": s.company_code,
                     "all_lines": s.all_lines,
                 }
-                for s in stations
-            ]
+                if show_scores and scores:
+                    station_data["search_score"] = scores[i]  # type: ignore[assignment]
+                stations_data.append(station_data)
 
             return [
                 TextContent(type="text", text=result_text),
@@ -367,25 +456,29 @@ class TransitMCPServer:
             if station.railway_company:
                 result_text += f"• **Company:** {station.railway_company}\n"
 
-            if station.line_type:
-                result_text += f"• **Line Type:** {station.line_type}\n"
+            if station.name_hiragana:
+                result_text += f"• **Hiragana:** {station.name_hiragana}\n"
 
-            if station.company_code:
-                result_text += f"• **Company Code:** {station.company_code}\n"
+            if station.name_katakana:
+                result_text += f"• **Katakana:** {station.name_katakana}\n"
+
+            if station.name_romaji:
+                result_text += f"• **Romaji:** {station.name_romaji}\n"
 
             if station.all_lines:
                 result_text += f"• **All Lines:** {', '.join(station.all_lines)}\n"
 
             station_data = {
                 "name": station.name,
+                "name_hiragana": station.name_hiragana,
+                "name_katakana": station.name_katakana,
+                "name_romaji": station.name_romaji,
                 "prefecture": station.prefecture,
                 "prefecture_id": station.prefecture_id,
                 "station_id": station.station_id,
                 "railway_company": station.railway_company,
                 "line_name": station.line_name,
                 "aliases": station.aliases,
-                "line_type": station.line_type,
-                "company_code": station.company_code,
                 "all_lines": station.all_lines,
             }
 

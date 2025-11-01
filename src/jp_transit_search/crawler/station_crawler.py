@@ -16,6 +16,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ..core.exceptions import NetworkError, ScrapingError
 from ..core.models import Station
+from ..utils.japanese_text import generate_text_variants
 
 logger = logging.getLogger(__name__)
 
@@ -258,14 +259,15 @@ class StationCrawler:
         with open(file_path, "w", newline="", encoding="utf-8") as csvfile:
             fieldnames = [
                 "name",
+                "name_hiragana",
+                "name_katakana",
+                "name_romaji",
                 "prefecture",
                 "prefecture_id",
                 "station_id",
                 "railway_company",
                 "line_name",
                 "aliases",
-                "line_type",
-                "company_code",
                 "all_lines",
             ]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -275,14 +277,15 @@ class StationCrawler:
                 writer.writerow(
                     {
                         "name": station.name,
+                        "name_hiragana": station.name_hiragana or "",
+                        "name_katakana": station.name_katakana or "",
+                        "name_romaji": station.name_romaji or "",
                         "prefecture": station.prefecture or "",
                         "prefecture_id": station.prefecture_id or "",
                         "station_id": station.station_id or "",
                         "railway_company": station.railway_company or "",
                         "line_name": station.line_name or "",
                         "aliases": "|".join(station.aliases) if station.aliases else "",
-                        "line_type": station.line_type or "",
-                        "company_code": station.company_code or "",
                         "all_lines": "|".join(station.all_lines)
                         if station.all_lines
                         else "",
@@ -306,14 +309,15 @@ class StationCrawler:
         with open(file_path, "a", newline="", encoding="utf-8") as csvfile:
             fieldnames = [
                 "name",
+                "name_hiragana",
+                "name_katakana",
+                "name_romaji",
                 "prefecture",
                 "prefecture_id",
                 "station_id",
                 "railway_company",
                 "line_name",
                 "aliases",
-                "line_type",
-                "company_code",
                 "all_lines",
             ]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -325,14 +329,15 @@ class StationCrawler:
                 writer.writerow(
                     {
                         "name": station.name,
+                        "name_hiragana": station.name_hiragana or "",
+                        "name_katakana": station.name_katakana or "",
+                        "name_romaji": station.name_romaji or "",
                         "prefecture": station.prefecture or "",
                         "prefecture_id": station.prefecture_id or "",
                         "station_id": station.station_id or "",
                         "railway_company": station.railway_company or "",
                         "line_name": station.line_name or "",
                         "aliases": "|".join(station.aliases) if station.aliases else "",
-                        "line_type": station.line_type or "",
-                        "company_code": station.company_code or "",
                         "all_lines": "|".join(station.all_lines)
                         if station.all_lines
                         else "",
@@ -365,14 +370,15 @@ class StationCrawler:
 
                 station = Station(
                     name=row["name"],
+                    name_hiragana=row.get("name_hiragana") or None,
+                    name_katakana=row.get("name_katakana") or None,
+                    name_romaji=row.get("name_romaji") or None,
                     prefecture=row["prefecture"] or None,
                     prefecture_id=prefecture_id or None,
                     station_id=row.get("station_id") or None,
                     railway_company=row["railway_company"] or None,
                     line_name=row["line_name"] or None,
                     aliases=aliases,
-                    line_type=row.get("line_type") or None,
-                    company_code=row.get("company_code") or None,
                     all_lines=all_lines,
                 )
                 stations.append(station)
@@ -756,16 +762,20 @@ class StationCrawler:
                 if not prefecture_id and station_prefecture:
                     prefecture_id = PREFECTURE_ID_MAPPING.get(station_prefecture)
 
+                # Generate Japanese text variants
+                text_variants = generate_text_variants(station_name)
+
                 station = Station(
                     name=station_name,
+                    name_hiragana=text_variants.get("hiragana"),
+                    name_katakana=text_variants.get("katakana"),
+                    name_romaji=text_variants.get("romaji"),
                     prefecture=station_prefecture,
                     prefecture_id=prefecture_id,
                     station_id=station_details.station_id,
                     railway_company=railway_company,
                     line_name=line_name,
                     aliases=station_details.aliases or [],
-                    line_type=self._get_line_type(line_name),
-                    company_code=self._get_company_code(railway_company),
                     all_lines=station_details.all_lines or [],
                 )
 
@@ -873,16 +883,20 @@ class StationCrawler:
                 # Use station_id extracted from href if station_details doesn't have it
                 final_station_id = station_details.station_id or station_id
 
+                # Generate Japanese text variants
+                text_variants = generate_text_variants(station_name)
+
                 station = Station(
                     name=station_name,
+                    name_hiragana=text_variants.get("hiragana"),
+                    name_katakana=text_variants.get("katakana"),
+                    name_romaji=text_variants.get("romaji"),
                     prefecture=station_prefecture,
                     prefecture_id=prefecture_id,
                     station_id=final_station_id,
                     railway_company=railway_company,
                     line_name=line_name,
                     aliases=station_details.aliases or [],
-                    line_type=self._get_line_type(line_name),
-                    company_code=self._get_company_code(railway_company),
                     all_lines=station_details.all_lines or [],
                 )
 
@@ -1022,8 +1036,6 @@ class StationCrawler:
                 script_tags = soup.find_all("script", type="application/json")
                 for script in script_tags:
                     try:
-                        import json
-
                         json_data = json.loads(script.string or "")
                         # Look for Next.js data structure
                         if "props" in json_data and "pageProps" in json_data["props"]:
@@ -1185,45 +1197,6 @@ class StationCrawler:
         else:
             return "その他"
 
-    def _get_line_type(self, line_name: str) -> str:
-        """Determine line type from line name.
-
-        Args:
-            line_name: Railway line name
-
-        Returns:
-            Line type classification
-        """
-        if "JR" in line_name:
-            return "JR"
-        elif "東京メトロ" in line_name or "メトロ" in line_name:
-            return "Metro"
-        elif "都営" in line_name:
-            return "Metro"
-        elif any(term in line_name for term in ["私鉄", "電鉄", "鉄道"]):
-            return "Private"
-        else:
-            return "Other"
-
-    def _get_company_code(self, company_name: str) -> str:
-        """Get company code from company name.
-
-        Args:
-            company_name: Railway company name
-
-        Returns:
-            Company code
-        """
-        company_codes = {
-            "JR東日本": "JR-E",
-            "東京メトロ": "TM",
-            "都営地下鉄": "TS",
-            "小田急電鉄": "OH",
-            "京浜急行電鉄": "KK",
-            "その他": "OTHER",
-        }
-        return company_codes.get(company_name, "OTHER")
-
     def _deduplicate_stations(self) -> list[Station]:
         """Remove duplicate stations based on name and prefecture.
 
@@ -1243,7 +1216,7 @@ class StationCrawler:
 
 
 class StationSearcher:
-    """Search engine for station data."""
+    """Search engine for station data with enhanced fuzzy search capabilities."""
 
     def __init__(self, stations: list[Station]):
         """Initialize searcher with station data.
@@ -1254,16 +1227,63 @@ class StationSearcher:
         self.stations = stations
         self._build_search_index()
 
+        # Import fuzzy search dependencies
+        try:
+            from fuzzywuzzy import fuzz, process  # type: ignore[import-untyped]
+
+            self._fuzz = fuzz
+            self._process = process
+            self._fuzzy_available = True
+        except ImportError:
+            self._fuzzy_available = False
+
     def _build_search_index(self) -> None:
-        """Build search index for faster lookups."""
+        """Build search index for faster lookups with Japanese text variants."""
         self.name_index: dict[str, list[Station]] = {}
+        self.hiragana_index: dict[str, list[Station]] = {}
+        self.katakana_index: dict[str, list[Station]] = {}
+        self.romaji_index: dict[str, list[Station]] = {}
         self.prefecture_index: dict[str, list[Station]] = {}
 
-        for station in self.stations:
-            # Index by name
+        # Build comprehensive search terms for each station (use index as key)
+        self.search_terms: dict[int, list[str]] = {}
+
+        for i, station in enumerate(self.stations):
+            # Index by original name
             if station.name not in self.name_index:
                 self.name_index[station.name] = []
             self.name_index[station.name].append(station)
+
+            # Build comprehensive search terms list
+            search_terms = [station.name]
+
+            # Index by hiragana name
+            if station.name_hiragana:
+                if station.name_hiragana not in self.hiragana_index:
+                    self.hiragana_index[station.name_hiragana] = []
+                self.hiragana_index[station.name_hiragana].append(station)
+                search_terms.append(station.name_hiragana)
+
+            # Index by katakana name
+            if station.name_katakana:
+                if station.name_katakana not in self.katakana_index:
+                    self.katakana_index[station.name_katakana] = []
+                self.katakana_index[station.name_katakana].append(station)
+                search_terms.append(station.name_katakana)
+
+            # Index by romaji name
+            if station.name_romaji:
+                if station.name_romaji not in self.romaji_index:
+                    self.romaji_index[station.name_romaji] = []
+                self.romaji_index[station.name_romaji].append(station)
+                search_terms.append(station.name_romaji)
+
+            # Add aliases to search terms
+            if station.aliases:
+                search_terms.extend(station.aliases)
+
+            # Store all search terms for this station (use index as key)
+            self.search_terms[i] = search_terms
 
             # Index by prefecture
             if station.prefecture:
@@ -1271,33 +1291,137 @@ class StationSearcher:
                     self.prefecture_index[station.prefecture] = []
                 self.prefecture_index[station.prefecture].append(station)
 
-    def search_by_name(self, query: str, exact: bool = False) -> list[Station]:
-        """Search stations by name.
+    def search_by_name(
+        self, query: str, exact: bool = False, fuzzy_threshold: int = 70
+    ) -> list[Station]:
+        """Search stations by name with enhanced fuzzy matching across Japanese text formats.
 
         Args:
-            query: Search query
+            query: Search query (can be kanji, hiragana, katakana, or romaji)
             exact: Whether to perform exact match
+            fuzzy_threshold: Minimum fuzzy match score (0-100) for results
 
         Returns:
-            List of matching stations
+            List of matching stations sorted by relevance
         """
         if exact:
-            return self.name_index.get(query, [])
+            # Check all indexes for exact matches
+            results = []
+            results.extend(self.name_index.get(query, []))
+            results.extend(self.hiragana_index.get(query, []))
+            results.extend(self.katakana_index.get(query, []))
+            results.extend(self.romaji_index.get(query, []))
 
-        # Fuzzy search
+            # Remove duplicates while preserving order using station identifiers
+            seen_stations = set()
+            unique_results = []
+            for station in results:
+                # Create unique identifier from station_id or fallback to name+line combination
+                unique_key = (
+                    station.station_id
+                    if station.station_id
+                    else f"{station.name}|{station.line_name}|{station.railway_company}"
+                )
+                if unique_key not in seen_stations:
+                    unique_results.append(station)
+                    seen_stations.add(unique_key)
+            return unique_results
+
+        # Enhanced fuzzy search
         results = []
         query_lower = query.lower()
 
-        for station in self.stations:
-            if query_lower in station.name.lower():
-                results.append(station)
-            elif station.aliases:
-                for alias in station.aliases:
-                    if query_lower in alias.lower():
-                        results.append(station)
-                        break
+        # First pass: collect exact alias matches and all other matches separately
+        exact_alias_matches = []
+        all_other_matches = []
 
-        return results
+        for i, station in enumerate(self.stations):
+            has_exact_alias = False
+            best_other_score = 0
+
+            # Check all search terms for this station using index
+            search_terms = self.search_terms[i]
+
+            # Check main station fields (name, hiragana, katakana, romaji)
+            main_terms = [
+                station.name,
+                station.name_hiragana,
+                station.name_katakana,
+                station.name_romaji,
+            ]
+            main_terms = [t for t in main_terms if t]  # Remove None values
+
+            # Check aliases
+            aliases = station.aliases if station.aliases else []
+
+            for term in search_terms:
+                term_lower = term.lower()
+                if query_lower == term_lower:
+                    if term in aliases:
+                        has_exact_alias = True
+                        break  # Found exact alias match
+                    else:
+                        best_other_score = max(
+                            best_other_score, 100
+                        )  # Exact match on main field
+                elif query_lower in term_lower:
+                    best_other_score = max(best_other_score, 90)  # Substring match
+
+            if has_exact_alias:
+                exact_alias_matches.append((station, 100))
+            elif best_other_score > 0:
+                all_other_matches.append((station, best_other_score))
+
+        # If we have exact alias matches, return only those
+        # Otherwise return all other matches (exact name matches + substring matches)
+        results_with_scores = []
+        if exact_alias_matches:
+            results_with_scores = exact_alias_matches
+        else:
+            results_with_scores = all_other_matches
+
+        # Third pass: fuzzy matching if available and no matches found
+        if not results_with_scores and self._fuzzy_available:
+            # Create a flat list of all search terms with their stations
+            all_terms = []
+            term_to_stations: dict[str, list[Station]] = {}
+
+            for i, station in enumerate(self.stations):
+                for term in self.search_terms[i]:
+                    all_terms.append(term)
+                    if term not in term_to_stations:
+                        term_to_stations[term] = []
+                    term_to_stations[term].append(station)
+
+            # Use fuzzywuzzy to find best matches
+            fuzzy_matches = self._process.extract(
+                query, all_terms, limit=20, scorer=self._fuzz.ratio
+            )
+
+            for match in fuzzy_matches:
+                term, score = match[0], match[1]
+                if score >= fuzzy_threshold:
+                    for station in term_to_stations[term]:
+                        results_with_scores.append((station, score))
+
+        # Remove duplicates and sort by score using station identifiers
+        seen_scored_stations: set[str] = set()
+        scored_results: list[tuple[Station, int]] = []
+        for station, score in results_with_scores:
+            # Create unique identifier from station_id or fallback to name+line combination
+            unique_key = (
+                station.station_id
+                if station.station_id
+                else f"{station.name}|{station.line_name}|{station.railway_company}"
+            )
+            if unique_key not in seen_scored_stations:
+                scored_results.append((station, score))
+                seen_scored_stations.add(unique_key)
+
+        # Sort by score (highest first) then by name
+        scored_results.sort(key=lambda x: (-x[1], x[0].name))
+
+        return [station for station, _score in scored_results]
 
     def search_by_prefecture(self, prefecture: str) -> list[Station]:
         """Search stations by prefecture.
@@ -1318,17 +1442,78 @@ class StationSearcher:
         """
         return sorted([p for p in self.prefecture_index.keys() if p])
 
-    def search_stations(self, query: str, limit: int = 10) -> list[Station]:
-        """Search stations with limit.
+    def search_stations(
+        self, query: str, limit: int = 10, fuzzy_threshold: int = 70
+    ) -> list[Station]:
+        """Search stations with limit and fuzzy matching.
+
+        Args:
+            query: Search query (can be in any Japanese text format)
+            limit: Maximum number of results
+            fuzzy_threshold: Minimum fuzzy match score (0-100)
+
+        Returns:
+            List of matching stations (up to limit) sorted by relevance
+        """
+        results = self.search_by_name(
+            query, exact=False, fuzzy_threshold=fuzzy_threshold
+        )
+        return results[:limit]
+
+    def fuzzy_search(
+        self, query: str, limit: int = 10, threshold: int = 60
+    ) -> list[tuple[Station, int]]:
+        """Perform fuzzy search and return results with scores.
 
         Args:
             query: Search query
             limit: Maximum number of results
+            threshold: Minimum fuzzy match score (0-100)
 
         Returns:
-            List of matching stations (up to limit)
+            List of (Station, score) tuples sorted by score
         """
-        results = self.search_by_name(query, exact=False)
+        if not self._fuzzy_available:
+            # Fallback to basic search
+            stations = self.search_by_name(query, exact=False)
+            return [(station, 100) for station in stations[:limit]]
+
+        # Create comprehensive search terms list
+        all_terms = []
+        term_to_stations: dict[str, list[Station]] = {}
+
+        for i, station in enumerate(self.stations):
+            for term in self.search_terms[i]:
+                all_terms.append(term)
+                if term not in term_to_stations:
+                    term_to_stations[term] = []
+                term_to_stations[term].append(station)
+
+        # Get fuzzy matches
+        fuzzy_matches = self._process.extract(
+            query, all_terms, limit=limit * 3, scorer=self._fuzz.ratio
+        )
+
+        # Build results with scores
+        results: list[tuple[Station, int]] = []
+        seen: set[str] = set()
+
+        for match in fuzzy_matches:
+            term, score = match[0], match[1]
+            if score >= threshold:
+                for station in term_to_stations[term]:
+                    # Create unique identifier from station_id or fallback to name+line combination
+                    unique_key = (
+                        station.station_id
+                        if station.station_id
+                        else f"{station.name}|{station.line_name}|{station.railway_company}"
+                    )
+                    if unique_key not in seen:
+                        results.append((station, score))
+                        seen.add(unique_key)
+
+        # Sort by score and limit results
+        results.sort(key=lambda x: -x[1])
         return results[:limit]
 
     def get_station_by_name(self, station_name: str) -> Station | None:

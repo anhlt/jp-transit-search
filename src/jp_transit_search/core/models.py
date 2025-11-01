@@ -9,6 +9,9 @@ class Station(BaseModel):
     """Represents a train station."""
 
     name: str = Field(..., description="Station name in Japanese")
+    name_hiragana: str | None = Field(None, description="Station name in hiragana")
+    name_katakana: str | None = Field(None, description="Station name in katakana")
+    name_romaji: str | None = Field(None, description="Station name in romaji")
     prefecture: str | None = Field(None, description="Prefecture name")
     prefecture_id: str | None = Field(
         None, description="JIS X 0401 prefecture code (01-47)"
@@ -25,10 +28,6 @@ class Station(BaseModel):
     )
 
     # Additional line information
-    line_type: str | None = Field(
-        None, description="Line type (JR, Metro, Private, etc.)"
-    )
-    company_code: str | None = Field(None, description="Railway company code")
     all_lines: list[str] | None = Field(
         default_factory=list, description="All lines serving this station"
     )
@@ -80,8 +79,14 @@ class Transfer(BaseModel):
 class Route(BaseModel):
     """Represents a complete route between stations."""
 
-    from_station: str = Field(..., description="Starting station")
-    to_station: str = Field(..., description="Destination station")
+    from_station: str = Field(..., description="Starting station (user input)")
+    to_station: str = Field(..., description="Destination station (user input)")
+    resolved_from_station: str | None = Field(
+        None, description="Resolved starting station name from search results"
+    )
+    resolved_to_station: str | None = Field(
+        None, description="Resolved destination station name from search results"
+    )
     duration: str = Field(..., description="Total duration (e.g., '49分')")
     cost: str = Field(..., description="Total cost (e.g., '628円')")
     transfer_count: int = Field(..., description="Number of transfers")
@@ -95,14 +100,18 @@ class Route(BaseModel):
     )
 
     def __str__(self) -> str:
-        return f"{self.from_station} → {self.to_station} ({self.duration}, {self.cost})"
+        display_from = self.resolved_from_station or self.from_station
+        display_to = self.resolved_to_station or self.to_station
+        return f"{display_from} → {display_to} ({self.duration}, {self.cost})"
 
     def summary(self) -> str:
         """Get route summary."""
+        display_from = self.resolved_from_station or self.from_station
+        display_to = self.resolved_to_station or self.to_station
         transfer_text = (
             "乗換なし" if self.transfer_count == 0 else f"乗換{self.transfer_count}回"
         )
-        return f"{self.from_station} → {self.to_station}\n所要時間: {self.duration}\n料金: {self.cost}\n{transfer_text}"
+        return f"{display_from} → {display_to}\n所要時間: {self.duration}\n料金: {self.cost}\n{transfer_text}"
 
 
 class RouteSearchRequest(BaseModel):

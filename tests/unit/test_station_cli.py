@@ -22,10 +22,10 @@ class TestStationCLICommands:
     @pytest.fixture
     def sample_csv_file(self):
         """Create a temporary CSV file with sample station data."""
-        csv_content = """name,prefecture,prefecture_id,station_id,railway_company,line_name,aliases,line_type,company_code,all_lines
-新宿,東京都,13,station_shinjuku,JR東日本,山手線,しんじゅく|Shinjuku,JR,JR-E,
-渋谷,東京都,13,station_shibuya,JR東日本,山手線,しぶや|Shibuya,JR,JR-E,
-横浜,神奈川県,14,station_yokohama,JR東日本,東海道線,よこはま|Yokohama,JR,JR-E,"""
+        csv_content = """name,name_hiragana,name_katakana,name_romaji,prefecture,prefecture_id,station_id,railway_company,line_name,aliases,all_lines
+新宿,しんじゅく,シンジュク,shinjuku,東京都,13,station_shinjuku,JR東日本,山手線,しんじゅく|Shinjuku,
+渋谷,しぶや,シブヤ,shibuya,東京都,13,station_shibuya,JR東日本,山手線,しぶや|Shibuya,
+横浜,よこはま,ヨコハマ,yokohama,神奈川県,14,station_yokohama,JR東日本,東海道線,よこはま|Yokohama,"""
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".csv", encoding="utf-8", delete=False
@@ -48,8 +48,28 @@ class TestStationCLICommands:
         # Mock the crawler
         mock_crawler = Mock()
         mock_stations = [
-            Station(name="新宿", prefecture="東京都"),
-            Station(name="渋谷", prefecture="東京都"),
+            Station(
+                name="新宿",
+                prefecture="東京都",
+                name_hiragana="しんじゅく",
+                name_katakana="シンジュク",
+                name_romaji="shinjuku",
+                prefecture_id="13",
+                station_id="station_shinjuku",
+                railway_company="JR東日本",
+                line_name="山手線",
+            ),
+            Station(
+                name="渋谷",
+                prefecture="東京都",
+                name_hiragana="しぶや",
+                name_katakana="シブヤ",
+                name_romaji="shibuya",
+                prefecture_id="13",
+                station_id="station_shibuya",
+                railway_company="JR東日本",
+                line_name="山手線",
+            ),
         ]
         mock_crawler.crawl_all_stations.return_value = mock_stations
         mock_crawler_class.return_value = mock_crawler
@@ -189,8 +209,11 @@ class TestStationCLICommands:
         )
 
         assert result.exit_code == 0
-        assert "name,prefecture,prefecture_id" in result.output
-        assert "新宿,東京都,13" in result.output
+        assert (
+            "name,name_hiragana,name_katakana,name_romaji,prefecture,prefecture_id"
+            in result.output
+        )
+        assert "新宿,しんじゅく,シンジュク,shinjuku,東京都,13" in result.output
         # Clean up
         sample_csv_file.unlink()
 
@@ -227,7 +250,7 @@ class TestStationCLICommands:
     def test_list_command_no_stations(self, runner):
         """Test station list with empty data."""
         # Create empty CSV file
-        csv_content = "name,prefecture,prefecture_id,station_id,railway_company,line_name,aliases,line_type,company_code,all_lines\n"
+        csv_content = "name,name_hiragana,name_katakana,name_romaji,prefecture,prefecture_id,station_id,railway_company,line_name,aliases,all_lines\n"
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".csv", encoding="utf-8", delete=False
         ) as f:

@@ -24,9 +24,13 @@ def format_route_table(routes: Route | list[Route], verbose: bool = False) -> No
         if len(routes) > 1:
             console.print(f"\n[bold cyan]Route {idx}:[/bold cyan]")
 
+        # Use resolved station names if available, otherwise fall back to user input
+        display_from = route.resolved_from_station or route.from_station
+        display_to = route.resolved_to_station or route.to_station
+
         # Create main route info table
         table = Table(
-            title=f"Route: {route.from_station} → {route.to_station}",
+            title=f"Route: {display_from} → {display_to}",
             show_header=True,
             header_style="bold magenta",
         )
@@ -114,9 +118,13 @@ def format_route_detailed(routes: Route | list[Route]) -> None:
         if len(routes) > 1:
             console.print(f"\n[bold cyan]Route {idx}:[/bold cyan]")
 
+        # Use resolved station names if available, otherwise fall back to user input
+        display_from = route.resolved_from_station or route.from_station
+        display_to = route.resolved_to_station or route.to_station
+
         # Route summary panel
-        summary_text = f"""[bold]From:[/bold] {route.from_station}
-[bold]To:[/bold] {route.to_station}
+        summary_text = f"""[bold]From:[/bold] {display_from}
+[bold]To:[/bold] {display_to}
 [bold]Duration:[/bold] {route.duration}
 [bold]Cost:[/bold] {route.cost}
 [bold]Transfers:[/bold] {route.transfer_count}"""
@@ -182,9 +190,13 @@ def format_route_json(routes: Route | list[Route]) -> str:
 
     routes_data = []
     for route in routes:
+        # Use resolved station names if available, otherwise fall back to user input
+        display_from = route.resolved_from_station or route.from_station
+        display_to = route.resolved_to_station or route.to_station
+
         route_dict = {
-            "from_station": route.from_station,
-            "to_station": route.to_station,
+            "from_station": display_from,
+            "to_station": display_to,
             "duration": route.duration,
             "cost": route.cost,
             "transfer_count": route.transfer_count,

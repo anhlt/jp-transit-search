@@ -12,6 +12,7 @@ from ..core import (
     ValidationError,
     YahooTransitScraper,
 )
+from ..utils.japanese_text import is_likely_romaji
 from .formatters import format_route_detailed, format_route_json, format_route_table
 from .station_commands import stations
 
@@ -87,6 +88,15 @@ def search(
                     "[red]Invalid datetime format. Use YYYY-MM-DD HH:MM[/red]"
                 )
                 sys.exit(1)
+
+        # Check for romaji input and show warning
+        if is_likely_romaji(from_station) or is_likely_romaji(to_station):
+            console.print(
+                "[yellow]⚠ Warning: Detected romaji input. For best results, use Japanese characters (kanji/hiragana/katakana).[/yellow]"
+            )
+            console.print(
+                "[dim]Example: 'shinjuku' → '新宿', 'shibuya' → '渋谷'[/dim]\n"
+            )
 
         with console.status(
             f"[bold green]Searching route from {from_station} to {to_station}..."

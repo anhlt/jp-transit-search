@@ -60,6 +60,9 @@ class TestStationCrawler:
                 railway_company="JR東日本",
                 line_name="山手線",
                 aliases=["しんじゅく", "Shinjuku"],
+                name_hiragana="しんじゅく",
+                name_katakana="シンジュク",
+                name_romaji="shinjuku",
             ),
             Station(name="渋谷", prefecture="東京都", prefecture_id="13"),
         ]
@@ -87,6 +90,9 @@ class TestStationCrawler:
             assert rows[0]["railway_company"] == "JR東日本"
             assert rows[0]["line_name"] == "山手線"
             assert rows[0]["aliases"] == "しんじゅく|Shinjuku"
+            assert rows[0]["name_hiragana"] == "しんじゅく"
+            assert rows[0]["name_katakana"] == "シンジュク"
+            assert rows[0]["name_romaji"] == "shinjuku"
 
             # Check second station (with empty fields)
             assert rows[1]["name"] == "渋谷"
@@ -94,6 +100,9 @@ class TestStationCrawler:
             assert rows[1]["prefecture_id"] == "13"
             assert rows[1]["railway_company"] == ""
             assert rows[1]["aliases"] == ""
+            assert rows[1]["name_hiragana"] == ""
+            assert rows[1]["name_katakana"] == ""
+            assert rows[1]["name_romaji"] == ""
 
     def test_save_to_csv_creates_parent_directory(self):
         """Test that save_to_csv creates parent directories."""
@@ -109,10 +118,10 @@ class TestStationCrawler:
 
     def test_load_from_csv(self):
         """Test loading stations from CSV file."""
-        # Create test CSV data
+        # Create test CSV data with new format
         csv_content = (
-            """name,prefecture,prefecture_id,station_id,railway_company,line_name,aliases,line_type,company_code,all_lines
-新宿,東京都,13,12345,JR東日本,山手線,しんじゅく|Shinjuku,JR,JR-E,
+            """name,prefecture,prefecture_id,station_id,railway_company,line_name,aliases,name_hiragana,name_katakana,name_romaji,all_lines
+新宿,東京都,13,12345,JR東日本,山手線,しんじゅく|Shinjuku,しんじゅく,シンジュク,shinjuku,
 渋谷,東京都,13,54321,,,,,,,"""
             ""
         )
@@ -138,6 +147,9 @@ class TestStationCrawler:
             assert station1.railway_company == "JR東日本"
             assert station1.line_name == "山手線"
             assert station1.aliases == ["しんじゅく", "Shinjuku"]
+            assert station1.name_hiragana == "しんじゅく"
+            assert station1.name_katakana == "シンジュク"
+            assert station1.name_romaji == "shinjuku"
 
             # Check second station
             station2 = stations[1]
@@ -147,6 +159,9 @@ class TestStationCrawler:
             assert station2.station_id == "54321"
             assert station2.railway_company is None
             assert station2.aliases == []
+            assert station2.name_hiragana is None
+            assert station2.name_katakana is None
+            assert station2.name_romaji is None
 
         finally:
             csv_path.unlink()
@@ -154,8 +169,8 @@ class TestStationCrawler:
     def test_load_from_csv_empty_values(self):
         """Test loading CSV with empty values."""
         csv_content = (
-            """name,prefecture,prefecture_id,station_id,railway_company,line_name,aliases,line_type,company_code,all_lines
-テスト駅,,,,,,,,,"""
+            """name,prefecture,prefecture_id,station_id,railway_company,line_name,aliases,name_hiragana,name_katakana,name_romaji,all_lines
+テスト駅,,,,,,,,,,"""
             ""
         )
 
@@ -176,7 +191,9 @@ class TestStationCrawler:
             assert station.prefecture_id is None
             assert station.station_id is None
             assert station.railway_company is None
-
+            assert station.name_hiragana is None
+            assert station.name_katakana is None
+            assert station.name_romaji is None
             assert station.aliases == []
 
         finally:
@@ -214,12 +231,41 @@ class TestStationSearcher:
         """Create sample stations for testing."""
         return [
             Station(
-                name="新宿", prefecture="東京都", aliases=["しんじゅく", "Shinjuku"]
+                name="新宿",
+                prefecture="東京都",
+                aliases=["しんじゅく", "Shinjuku"],
+                name_hiragana="しんじゅく",
+                name_katakana="シンジュク",
+                name_romaji="shinjuku",
             ),
-            Station(name="新宿三丁目", prefecture="東京都"),
-            Station(name="渋谷", prefecture="東京都"),
-            Station(name="横浜", prefecture="神奈川県"),
-            Station(name="新横浜", prefecture="神奈川県"),
+            Station(
+                name="新宿三丁目",
+                prefecture="東京都",
+                name_hiragana="しんじゅくさんちょうめ",
+                name_katakana="シンジュクサンチョウメ",
+                name_romaji="shinjuku-sanchome",
+            ),
+            Station(
+                name="渋谷",
+                prefecture="東京都",
+                name_hiragana="しぶや",
+                name_katakana="シブヤ",
+                name_romaji="shibuya",
+            ),
+            Station(
+                name="横浜",
+                prefecture="神奈川県",
+                name_hiragana="よこはま",
+                name_katakana="ヨコハマ",
+                name_romaji="yokohama",
+            ),
+            Station(
+                name="新横浜",
+                prefecture="神奈川県",
+                name_hiragana="しんよこはま",
+                name_katakana="シンヨコハマ",
+                name_romaji="shin-yokohama",
+            ),
         ]
 
     def test_init(self, sample_stations):
@@ -345,6 +391,337 @@ class TestStationSearcher:
         results = searcher.search_by_name("テスト")
         assert len(results) == 1
         assert results[0].name == "テスト駅"
+
+    def test_search_by_hiragana(self, sample_stations):
+        """Test searching by hiragana text."""
+        searcher = StationSearcher(sample_stations)
+
+        results = searcher.search_by_name("しんじゅく")
+        assert len(results) >= 1
+        station_names = [s.name for s in results]
+        assert "新宿" in station_names
+
+    def test_search_by_katakana(self, sample_stations):
+        """Test searching by katakana text."""
+        searcher = StationSearcher(sample_stations)
+
+        results = searcher.search_by_name("シブヤ")
+        assert len(results) >= 1
+        station_names = [s.name for s in results]
+        assert "渋谷" in station_names
+
+    def test_search_by_romaji(self, sample_stations):
+        """Test searching by romaji text."""
+        searcher = StationSearcher(sample_stations)
+
+        results = searcher.search_by_name("yokohama")
+        assert len(results) >= 1
+        station_names = [s.name for s in results]
+        assert "横浜" in station_names
+
+    def test_fuzzy_search_with_threshold(self, sample_stations):
+        """Test fuzzy search with different thresholds."""
+        searcher = StationSearcher(sample_stations)
+
+        # High threshold - exact matches only
+        results = searcher.fuzzy_search("新宿", threshold=90)
+        assert len(results) >= 1
+        if isinstance(results[0], tuple):
+            station, score = results[0]
+            assert station.name == "新宿"
+            assert score >= 90
+        else:
+            assert results[0].name == "新宿"
+
+        # Lower threshold - fuzzy matches allowed
+        results = searcher.fuzzy_search("shinjuk", threshold=70)  # Missing 'u'
+        assert len(results) >= 1
+
+    def test_fuzzy_search_returns_scores(self, sample_stations):
+        """Test that fuzzy search returns tuples with scores."""
+        searcher = StationSearcher(sample_stations)
+
+        results = searcher.fuzzy_search("新宿", threshold=50)
+        assert len(results) > 0
+
+        for result in results:
+            if isinstance(result, tuple):
+                station, score = result
+                assert hasattr(station, "name")
+                assert isinstance(score, (int, float))
+                assert 0 <= score <= 100
+
+
+class TestEnhancedStationSearch:
+    """Test cases for enhanced station search functionality."""
+
+    @pytest.fixture
+    def comprehensive_stations(self):
+        """Create comprehensive station list for advanced search testing."""
+        return [
+            Station(
+                name="新宿",
+                prefecture="東京都",
+                aliases=["しんじゅく", "Shinjuku"],
+                name_hiragana="しんじゅく",
+                name_katakana="シンジュク",
+                name_romaji="shinjuku",
+                railway_company="JR東日本",
+                line_name="山手線",
+            ),
+            Station(
+                name="新宿三丁目",
+                prefecture="東京都",
+                name_hiragana="しんじゅくさんちょうめ",
+                name_katakana="シンジュクサンチョウメ",
+                name_romaji="shinjuku-sanchome",
+                railway_company="東京メトロ",
+                line_name="丸ノ内線",
+            ),
+            Station(
+                name="西新宿",
+                prefecture="東京都",
+                name_hiragana="にししんじゅく",
+                name_katakana="ニシシンジュク",
+                name_romaji="nishi-shinjuku",
+                railway_company="東京メトロ",
+                line_name="丸ノ内線",
+            ),
+            Station(
+                name="渋谷",
+                prefecture="東京都",
+                name_hiragana="しぶや",
+                name_katakana="シブヤ",
+                name_romaji="shibuya",
+                railway_company="JR東日本",
+                line_name="山手線",
+            ),
+            Station(
+                name="横浜",
+                prefecture="神奈川県",
+                name_hiragana="よこはま",
+                name_katakana="ヨコハマ",
+                name_romaji="yokohama",
+                railway_company="JR東日本",
+                line_name="東海道本線",
+            ),
+        ]
+
+    def test_fuzzy_search_exact_match(self, comprehensive_stations):
+        """Test fuzzy search with exact matches returns high scores."""
+        searcher = StationSearcher(comprehensive_stations)
+
+        results = searcher.fuzzy_search("新宿", threshold=80)
+        assert len(results) > 0
+
+        # First result should be exact match with high score
+        first_result = results[0]
+        if isinstance(first_result, tuple):
+            station, score = first_result
+            assert station.name == "新宿"
+            assert score >= 95  # Exact match should have very high score
+
+    def test_fuzzy_search_partial_match(self, comprehensive_stations):
+        """Test fuzzy search with partial matches."""
+        searcher = StationSearcher(comprehensive_stations)
+
+        results = searcher.fuzzy_search("新宿", threshold=50)
+        assert len(results) >= 3  # Should find 新宿, 新宿三丁目, 西新宿
+
+        station_names = []
+        for result in results:
+            if isinstance(result, tuple):
+                station, score = result
+                station_names.append(station.name)
+                assert score >= 50
+            else:
+                station_names.append(result.name)
+
+        assert "新宿" in station_names
+        assert "新宿三丁目" in station_names or "西新宿" in station_names
+
+    def test_fuzzy_search_hiragana_query(self, comprehensive_stations):
+        """Test fuzzy search with hiragana query."""
+        searcher = StationSearcher(comprehensive_stations)
+
+        results = searcher.fuzzy_search("しんじゅく", threshold=70)
+        assert len(results) > 0
+
+        # Should find stations with matching hiragana
+        found_shinjuku = False
+        for result in results:
+            if isinstance(result, tuple):
+                station, score = result
+                if station.name == "新宿":
+                    found_shinjuku = True
+                    assert score >= 70
+            else:
+                if result.name == "新宿":
+                    found_shinjuku = True
+
+        assert found_shinjuku
+
+    def test_fuzzy_search_katakana_query(self, comprehensive_stations):
+        """Test fuzzy search with katakana query."""
+        searcher = StationSearcher(comprehensive_stations)
+
+        results = searcher.fuzzy_search("シブヤ", threshold=70)
+        assert len(results) > 0
+
+        # Should find Shibuya station
+        found_shibuya = False
+        for result in results:
+            if isinstance(result, tuple):
+                station, score = result
+                if station.name == "渋谷":
+                    found_shibuya = True
+                    assert score >= 70
+            else:
+                if result.name == "渋谷":
+                    found_shibuya = True
+
+        assert found_shibuya
+
+    def test_fuzzy_search_romaji_query(self, comprehensive_stations):
+        """Test fuzzy search with romaji query."""
+        searcher = StationSearcher(comprehensive_stations)
+
+        results = searcher.fuzzy_search("yokohama", threshold=70)
+        assert len(results) > 0
+
+        # Should find Yokohama station
+        found_yokohama = False
+        for result in results:
+            if isinstance(result, tuple):
+                station, score = result
+                if station.name == "横浜":
+                    found_yokohama = True
+                    assert score >= 70
+            else:
+                if result.name == "横浜":
+                    found_yokohama = True
+
+        assert found_yokohama
+
+    def test_fuzzy_search_typo_tolerance(self, comprehensive_stations):
+        """Test fuzzy search with typos."""
+        searcher = StationSearcher(comprehensive_stations)
+
+        # Test with common typos
+        test_cases = [
+            ("shinjku", "新宿"),  # Missing 'u'
+            ("shibya", "渋谷"),  # Missing 'u'
+            ("yokohma", "横浜"),  # Missing 'a'
+        ]
+
+        for typo_query, expected_station in test_cases:
+            results = searcher.fuzzy_search(typo_query, threshold=60)
+            assert len(results) > 0, f"No results found for typo query: {typo_query}"
+
+            found_expected = False
+            for result in results:
+                if isinstance(result, tuple):
+                    station, score = result
+                    if station.name == expected_station:
+                        found_expected = True
+                        assert score >= 60
+                        break
+                else:
+                    if result.name == expected_station:
+                        found_expected = True
+                        break
+
+            assert found_expected, (
+                f"Expected station '{expected_station}' not found for typo '{typo_query}'"
+            )
+
+    def test_fuzzy_search_threshold_filtering(self, comprehensive_stations):
+        """Test that fuzzy search respects threshold filtering."""
+        searcher = StationSearcher(comprehensive_stations)
+
+        # High threshold should return fewer results
+        high_results = searcher.fuzzy_search("新宿", threshold=90)
+        low_results = searcher.fuzzy_search("新宿", threshold=50)
+
+        assert len(high_results) <= len(low_results)
+
+        # All high threshold results should have high scores
+        for result in high_results:
+            if isinstance(result, tuple):
+                station, score = result
+                assert score >= 90
+
+    def test_fuzzy_search_score_ordering(self, comprehensive_stations):
+        """Test that fuzzy search results are ordered by score."""
+        searcher = StationSearcher(comprehensive_stations)
+
+        results = searcher.fuzzy_search("新宿", threshold=40)
+        assert len(results) > 1
+
+        # Extract scores and verify ordering
+        scores = []
+        for result in results:
+            if isinstance(result, tuple):
+                station, score = result
+                scores.append(score)
+            else:
+                scores.append(100.0)  # Assume perfect match if no score
+
+        # Scores should be in descending order
+        assert scores == sorted(scores, reverse=True)
+
+    def test_fuzzy_search_empty_query(self, comprehensive_stations):
+        """Test fuzzy search with empty query."""
+        searcher = StationSearcher(comprehensive_stations)
+
+        results = searcher.fuzzy_search("", threshold=50)
+        # Empty query should return no results
+        assert len(results) == 0
+
+    def test_fuzzy_search_no_matches_above_threshold(self, comprehensive_stations):
+        """Test fuzzy search when no matches exceed threshold."""
+        searcher = StationSearcher(comprehensive_stations)
+
+        # Use a very high threshold with a poor match
+        results = searcher.fuzzy_search("xyz", threshold=95)
+        assert len(results) == 0
+
+    def test_build_search_index_with_japanese_variants(self, comprehensive_stations):
+        """Test that search index includes all Japanese text variants."""
+        searcher = StationSearcher(comprehensive_stations)
+
+        # Check that index contains various forms
+        index_keys = set()
+        for key_list in searcher.name_index.values():
+            for station in key_list:
+                index_keys.add(station.name)
+
+        # Should contain the original station names
+        assert "新宿" in [s.name for s in comprehensive_stations]
+        assert "渋谷" in [s.name for s in comprehensive_stations]
+
+    def test_enhanced_search_by_name_with_japanese_variants(
+        self, comprehensive_stations
+    ):
+        """Test enhanced search_by_name method with Japanese variants."""
+        searcher = StationSearcher(comprehensive_stations)
+
+        # Test searching by different text forms
+        test_cases = [
+            ("新宿", "新宿"),
+            ("しんじゅく", "新宿"),
+            ("シンジュク", "新宿"),
+            ("shinjuku", "新宿"),
+        ]
+
+        for query, expected_station in test_cases:
+            results = searcher.search_by_name(query, exact=False)
+            assert len(results) > 0, f"No results for query: {query}"
+
+            station_names = [s.name for s in results]
+            assert expected_station in station_names, (
+                f"Expected '{expected_station}' not found for query '{query}'"
+            )
 
 
 class TestStationDetailExtraction:

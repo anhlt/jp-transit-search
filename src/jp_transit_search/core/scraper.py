@@ -144,6 +144,21 @@ class YahooTransitScraper:
             soup = BeautifulSoup(html_content, "html.parser")
             routes: list[Route] = []
 
+            # Extract resolved station names from the page title
+            resolved_from_station = None
+            resolved_to_station = None
+
+            # Try to get resolved names from <h1 class="title"> element
+            title_element = soup.find("h1", class_="title")
+            if title_element:
+                title_text = title_element.get_text().strip()
+                # Extract from pattern like "横浜→渋谷"
+                # Split on the arrow symbol and clean up any extra text
+                arrow_match = re.search(r"([^→]+)→([^→\s]+)", title_text)
+                if arrow_match:
+                    resolved_from_station = arrow_match.group(1).strip()
+                    resolved_to_station = arrow_match.group(2).strip()
+
             # Find all route sections - try multiple approaches
             route_sections: list[Tag] = []
 
@@ -185,7 +200,12 @@ class YahooTransitScraper:
             # Parse each route
             for route_section in route_sections:
                 try:
-                    route = self._parse_single_route(route_section, request)
+                    route = self._parse_single_route(
+                        route_section,
+                        request,
+                        resolved_from_station,
+                        resolved_to_station,
+                    )
                     if route:
                         routes.append(route)
                 except Exception:
@@ -258,13 +278,19 @@ class YahooTransitScraper:
         return None
 
     def _parse_single_route(
-        self, route_section: Tag, request: RouteSearchRequest
+        self,
+        route_section: Tag,
+        request: RouteSearchRequest,
+        resolved_from_station: str | None = None,
+        resolved_to_station: str | None = None,
     ) -> Route | None:
         """Parse a single route from a route section.
 
         Args:
             route_section: BeautifulSoup element containing route information
             request: Original search request
+            resolved_from_station: Resolved departure station name from search results
+            resolved_to_station: Resolved destination station name from search results
 
         Returns:
             Parsed Route object
@@ -291,6 +317,8 @@ class YahooTransitScraper:
             return Route(
                 from_station=request.from_station,
                 to_station=request.to_station,
+                resolved_from_station=resolved_from_station,
+                resolved_to_station=resolved_to_station,
                 duration=duration,
                 cost=cost,
                 transfer_count=transfer_count,

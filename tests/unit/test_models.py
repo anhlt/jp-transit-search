@@ -23,11 +23,17 @@ class TestStation:
             railway_company="JR東日本",
             line_name="東海道本線",
             aliases=["ヨコハマ", "yokohama"],
+            name_hiragana="よこはま",
+            name_katakana="ヨコハマ",
+            name_romaji="yokohama",
         )
 
         assert station.name == "横浜"
         assert station.prefecture == "神奈川県"
         assert len(station.aliases) == 2
+        assert station.name_hiragana == "よこはま"
+        assert station.name_katakana == "ヨコハマ"
+        assert station.name_romaji == "yokohama"
         assert str(station) == "横浜"
 
 
@@ -185,6 +191,29 @@ class TestRouteSearchRequest:
         # Pydantic doesn't validate empty strings by default
         station = Station(name="")
         assert station.name == ""
+
+    def test_station_japanese_text_fields(self):
+        """Test station with Japanese text variants."""
+        station = Station(
+            name="新宿",
+            name_hiragana="しんじゅく",
+            name_katakana="シンジュク",
+            name_romaji="shinjuku",
+        )
+
+        assert station.name == "新宿"
+        assert station.name_hiragana == "しんじゅく"
+        assert station.name_katakana == "シンジュク"
+        assert station.name_romaji == "shinjuku"
+
+    def test_station_optional_japanese_fields(self):
+        """Test station with optional Japanese text fields."""
+        station = Station(name="東京")
+
+        assert station.name == "東京"
+        assert station.name_hiragana is None
+        assert station.name_katakana is None
+        assert station.name_romaji is None
 
     def test_transfer_negative_values_allowed(self):
         """Test transfer allows negative values (Pydantic default behavior)."""

@@ -245,15 +245,33 @@ def crawl_stations(
     help="Station data CSV file",
 )
 @click.option("--exact", is_flag=True, help="Exact match only")
+@click.option(
+    "--fuzzy-threshold",
+    "-t",
+    default=70,
+    help="Minimum fuzzy match score (0-100, default: 70)",
+)
+@click.option("--show-scores", is_flag=True, help="Show fuzzy match scores")
 def search_stations(
-    query: str, prefecture: str | None, limit: int, data: str, exact: bool
+    query: str,
+    prefecture: str | None,
+    limit: int,
+    data: str,
+    exact: bool,
+    fuzzy_threshold: int,
+    show_scores: bool,
 ) -> None:
-    """Search for stations by name.
+    """Search for stations by name with enhanced fuzzy matching.
+
+    Supports searching in Japanese (kanji, hiragana, katakana) and romaji.
+    Uses fuzzy matching to find stations even with slight misspellings.
 
     Examples:
         jp-transit stations search "新宿"
+        jp-transit stations search "shinjuku" --show-scores
         jp-transit stations search "駅" --prefecture "東京都" --limit 5
         jp-transit stations search "東京" --exact
+        jp-transit stations search "shibuya" --fuzzy-threshold 80
     """
     data_path = Path(data)
 
@@ -268,42 +286,93 @@ def search_stations(
         searcher = StationSearcher(stations)
 
         # Search for stations
-        if prefecture:
-            results = [
-                s
-                for s in searcher.search_by_prefecture(prefecture)
-                if query.lower() in s.name.lower()
-            ]
+        if exact:
+            results = searcher.search_by_name(query, exact=True)
+            if prefecture:
+                # Filter exact results by prefecture
+                results = [s for s in results if s.prefecture == prefecture]
         else:
-            results = searcher.search_by_name(query, exact=exact)
+            # Use enhanced search_by_name for fuzzy matching
+            results = searcher.search_by_name(
+                query, exact=False, fuzzy_threshold=fuzzy_threshold
+            )
+            if prefecture:
+                # Filter results by prefecture
+                results = [s for s in results if s.prefecture == prefecture]
 
         # Limit results
         results = results[:limit]
 
         if not results:
             console.print(f"[yellow]No stations found matching '{query}'[/yellow]")
+            if not exact and fuzzy_threshold > 50:
+                console.print(
+                    f"[dim]Try lowering --fuzzy-threshold (currently {fuzzy_threshold}) or use exact search with --exact[/dim]"
+                )
             return
 
         # Display results
+        title = f"Station Search Results: '{query}'"
+        if not exact:
+            title += f" (fuzzy threshold: {fuzzy_threshold})"
+
         table = Table(
-            title=f"Station Search Results: '{query}'",
+            title=title,
             show_header=True,
             header_style="bold magenta",
         )
         table.add_column("Name", style="cyan", no_wrap=True)
+        if show_scores and not exact:
+            table.add_column("Score", style="magenta", no_wrap=True)
+        table.add_column("Hiragana", style="dim cyan", no_wrap=True)
+        table.add_column("Katakana", style="dim cyan", no_wrap=True)
+        table.add_column("Romaji", style="dim cyan", no_wrap=True)
         table.add_column("Station Code", style="yellow", no_wrap=True)
         table.add_column("Line Name", style="blue")
         table.add_column("Prefecture", style="green")
 
-        for station in results:
-            table.add_row(
-                station.name,
-                str(station.station_id) if station.station_id else "",
-                station.line_name or "",
-                station.prefecture or "",
-            )
+        for item in results:
+            if isinstance(item, tuple) and len(item) == 2:
+                # Fuzzy search result with score
+                station, score = item
+                row_data = [station.name]
+                if show_scores and not exact:
+                    row_data.append(f"{score:.1f}")
+                row_data.extend(
+                    [
+                        station.name_hiragana or "",
+                        station.name_katakana or "",
+                        station.name_romaji or "",
+                        str(station.station_id) if station.station_id else "",
+                        station.line_name or "",
+                        station.prefecture or "",
+                    ]
+                )
+            else:
+                # Regular station result
+                station = item
+                row_data = [station.name]
+                if show_scores and not exact:
+                    row_data.append("100.0")
+                row_data.extend(
+                    [
+                        station.name_hiragana or "",
+                        station.name_katakana or "",
+                        station.name_romaji or "",
+                        str(station.station_id) if station.station_id else "",
+                        station.line_name or "",
+                        station.prefecture or "",
+                    ]
+                )
+
+            table.add_row(*row_data)
 
         console.print(table)
+
+        if not exact and len(results) > 0:
+            console.print(
+                f"[dim]Found {len(results)} stations. Use --show-scores to see match quality.[/dim]"
+            )
 
     except Exception as e:
         console.print(f"[red]Error searching stations:[/red] {e}")
@@ -369,14 +438,15 @@ def list_stations(
             station_data = [
                 {
                     "name": s.name,
+                    "name_hiragana": s.name_hiragana,
+                    "name_katakana": s.name_katakana,
+                    "name_romaji": s.name_romaji,
                     "prefecture": s.prefecture,
                     "prefecture_id": s.prefecture_id,
                     "station_id": s.station_id,
                     "railway_company": s.railway_company,
                     "line_name": s.line_name,
                     "aliases": s.aliases,
-                    "line_type": s.line_type,
-                    "company_code": s.company_code,
                     "all_lines": s.all_lines,
                 }
                 for s in filtered_stations
@@ -390,14 +460,15 @@ def list_stations(
             output = io.StringIO()
             fieldnames = [
                 "name",
+                "name_hiragana",
+                "name_katakana",
+                "name_romaji",
                 "prefecture",
                 "prefecture_id",
                 "station_id",
                 "railway_company",
                 "line_name",
                 "aliases",
-                "line_type",
-                "company_code",
                 "all_lines",
             ]
             writer = csv.DictWriter(output, fieldnames=fieldnames)
@@ -407,14 +478,15 @@ def list_stations(
                 writer.writerow(
                     {
                         "name": station.name,
+                        "name_hiragana": station.name_hiragana or "",
+                        "name_katakana": station.name_katakana or "",
+                        "name_romaji": station.name_romaji or "",
                         "prefecture": station.prefecture or "",
                         "prefecture_id": station.prefecture_id or "",
                         "station_id": station.station_id or "",
                         "railway_company": station.railway_company or "",
                         "line_name": station.line_name or "",
                         "aliases": "|".join(station.aliases) if station.aliases else "",
-                        "line_type": station.line_type or "",
-                        "company_code": station.company_code or "",
                         "all_lines": "|".join(station.all_lines)
                         if station.all_lines
                         else "",
