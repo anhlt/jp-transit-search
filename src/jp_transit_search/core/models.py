@@ -9,6 +9,9 @@ class Station(BaseModel):
     """Represents a train station."""
 
     name: str = Field(..., description="Station name in Japanese")
+    name_hiragana: str | None = Field(None, description="Station name in hiragana")
+    name_katakana: str | None = Field(None, description="Station name in katakana")
+    name_romaji: str | None = Field(None, description="Station name in romaji")
     prefecture: str | None = Field(None, description="Prefecture name")
     prefecture_id: str | None = Field(
         None, description="JIS X 0401 prefecture code (01-47)"
@@ -25,10 +28,6 @@ class Station(BaseModel):
     )
 
     # Additional line information
-    line_type: str | None = Field(
-        None, description="Line type (JR, Metro, Private, etc.)"
-    )
-    company_code: str | None = Field(None, description="Railway company code")
     all_lines: list[str] | None = Field(
         default_factory=list, description="All lines serving this station"
     )

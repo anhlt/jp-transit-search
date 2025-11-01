@@ -32,6 +32,9 @@ class TestTransitMCPServer:
             duration="2h 30m",
             cost="¥13,320",
             transfer_count=1,
+            departure_time=None,
+            arrival_time=None,
+            search_date=None,
             transfers=[
                 Transfer(
                     from_station="Tokyo",
@@ -39,6 +42,11 @@ class TestTransitMCPServer:
                     line_name="JR Tokaido Line",
                     duration_minutes=7,
                     cost_yen=160,
+                    departure_time=None,
+                    arrival_time=None,
+                    departure_platform=None,
+                    arrival_platform=None,
+                    riding_position=None,
                 ),
                 Transfer(
                     from_station="Shinagawa",
@@ -46,6 +54,11 @@ class TestTransitMCPServer:
                     line_name="JR Tokaido Shinkansen",
                     duration_minutes=143,
                     cost_yen=13160,
+                    departure_time=None,
+                    arrival_time=None,
+                    departure_platform=None,
+                    arrival_platform=None,
+                    riding_position=None,
                 ),
             ],
         )
@@ -56,16 +69,24 @@ class TestTransitMCPServer:
         return [
             Station(
                 name="東京駅",
+                name_hiragana="とうきょうえき",
+                name_katakana="トウキョウエキ",
+                name_romaji="tokyo",
                 prefecture="Tokyo",
-                city="Chiyoda",
+                prefecture_id="13",
+                station_id="22991",
                 railway_company="JR East",
                 line_name="JR Tokaido Line",
                 aliases=["Tokyo Station"],
             ),
             Station(
                 name="新宿駅",
+                name_hiragana="しんじゅくえき",
+                name_katakana="シンジュクエキ",
+                name_romaji="shinjuku",
                 prefecture="Tokyo",
-                city="Shinjuku",
+                prefecture_id="13",
+                station_id="22715",
                 railway_company="JR East",
                 line_name="JR Yamanote Line",
                 aliases=["Shinjuku Station"],
@@ -148,10 +169,61 @@ class TestTransitMCPServer:
 
         # Check text content
         text_content = result[0].text
-        assert "Found 2 stations matching 'Tokyo':" in text_content
+        assert "Found 2 stations matching 'Tokyo'" in text_content
+        assert "fuzzy (threshold: 70) search" in text_content
         assert "東京駅" in text_content
         assert "新宿駅" in text_content
         assert "Line:" in text_content
+        assert "Romaji:" in text_content
+
+    @pytest.mark.asyncio
+    async def test_search_stations_with_exact_flag(self, server, sample_stations):
+        """Test station search with exact matching."""
+        with patch.object(
+            server.station_searcher, "search_by_name", return_value=sample_stations
+        ):
+            result = await server._search_stations(
+                {"query": "Tokyo", "limit": 10, "exact": True}
+            )
+
+        assert len(result) == 2
+        text_content = result[0].text
+        assert "exact search" in text_content
+        assert "東京駅" in text_content
+
+    @pytest.mark.asyncio
+    async def test_search_stations_with_fuzzy_threshold(self, server, sample_stations):
+        """Test station search with custom fuzzy threshold."""
+        with patch.object(
+            server.station_searcher, "search_stations", return_value=sample_stations
+        ):
+            result = await server._search_stations(
+                {"query": "Tokyo", "limit": 10, "fuzzy_threshold": 60}
+            )
+
+        assert len(result) == 2
+        text_content = result[0].text
+        assert "fuzzy (threshold: 60) search" in text_content
+
+    @pytest.mark.asyncio
+    async def test_search_stations_with_scores(self, server, sample_stations):
+        """Test station search with score display."""
+        station_scores = [(sample_stations[0], 95), (sample_stations[1], 85)]
+        with patch.object(
+            server.station_searcher, "fuzzy_search", return_value=station_scores
+        ):
+            result = await server._search_stations(
+                {"query": "Tokyo", "limit": 10, "show_scores": True}
+            )
+
+        assert len(result) == 2
+        text_content = result[0].text
+        assert "Score: 95%" in text_content
+        assert "Score: 85%" in text_content
+
+        # Check JSON data includes scores
+        json_content = result[1].text
+        assert "search_score" in json_content
 
     @pytest.mark.asyncio
     async def test_list_station_database_success(self, server, sample_stations):
@@ -249,6 +321,9 @@ class TestTransitMCPServer:
             duration="48分",
             cost="945円",
             transfer_count=0,
+            departure_time=None,
+            arrival_time=None,
+            search_date=None,
             transfers=[
                 Transfer(
                     from_station="大船",
@@ -256,6 +331,8 @@ class TestTransitMCPServer:
                     line_name="JR湘南新宿ライン快速",
                     duration_minutes=48,
                     cost_yen=945,
+                    departure_time=None,
+                    arrival_time=None,
                     departure_platform="2番線",
                     arrival_platform="4番線",
                     riding_position="[15両] 前 中",

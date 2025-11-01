@@ -189,8 +189,11 @@ class TestStationCLICommands:
         )
 
         assert result.exit_code == 0
-        assert "name,prefecture,prefecture_id" in result.output
-        assert "新宿,東京都,13" in result.output
+        assert (
+            "name,name_hiragana,name_katakana,name_romaji,prefecture,prefecture_id"
+            in result.output
+        )
+        assert "新宿,,,,東京都,13" in result.output
         # Clean up
         sample_csv_file.unlink()
 

@@ -145,9 +145,9 @@ class TestMCPIntegration:
             "prefecture" in json_content.text
         )  # Check for actual field in Station model
 
-        # Verify the station searcher was called correctly
+        # Verify the station searcher was called correctly with new fuzzy_threshold parameter
         mcp_server.station_searcher.search_stations.assert_called_once_with(
-            "東京", limit=10
+            "東京", limit=10, fuzzy_threshold=70
         )
 
     @pytest.mark.asyncio
