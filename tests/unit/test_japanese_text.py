@@ -227,7 +227,6 @@ class TestJapaneseTextConverter:
         # Individual method calls
         _hiragana = converter.to_hiragana(test_text)
         _katakana = converter.to_katakana(test_text)
-        _romaji = converter.to_romaji(test_text)
         normalized = converter.normalize_for_search(test_text)
 
         # generate_all_variants call
