@@ -39,14 +39,24 @@ def sample_stations():
     return [
         Station(
             name="東京駅",
+            name_hiragana="とうきょうえき",
+            name_katakana="トウキョウエキ",
+            name_romaji="tokyo eki",
             prefecture="東京都",
+            prefecture_id="13",
+            station_id="22828",
             railway_company="JR東日本",
             line_name="JR東海道本線",
             aliases=["Tokyo Station", "とうきょうえき"],
         ),
         Station(
             name="新宿駅",
+            name_hiragana="しんじゅくえき",
+            name_katakana="シンジュクエキ",
+            name_romaji="shinjuku eki",
             prefecture="東京都",
+            prefecture_id="13",
+            station_id="22829",
             railway_company="JR東日本",
             line_name="JR山手線",
             aliases=["Shinjuku Station", "しんじゅくえき"],
@@ -57,7 +67,7 @@ def sample_stations():
 @pytest.fixture
 def sample_route():
     """Sample route data for testing."""
-    from datetime import time
+    from datetime import datetime, time
 
     return Route(
         from_station="東京駅",
@@ -67,6 +77,7 @@ def sample_route():
         transfer_count=1,
         departure_time=time(9, 0),
         arrival_time=time(11, 30),
+        search_date=datetime.now(),
         transfers=[
             Transfer(
                 from_station="東京駅",
@@ -74,6 +85,11 @@ def sample_route():
                 line_name="JR東海道新幹線",
                 duration_minutes=18,
                 cost_yen=550,
+                departure_time=time(9, 0),
+                arrival_time=time(9, 18),
+                departure_platform="14",
+                arrival_platform="11",
+                riding_position="[16両] 前 中 後",
             ),
             Transfer(
                 from_station="新横浜駅",
@@ -81,6 +97,11 @@ def sample_route():
                 line_name="JR東海道新幹線",
                 duration_minutes=132,
                 cost_yen=12770,
+                departure_time=time(9, 25),
+                arrival_time=time(11, 37),
+                departure_platform="11",
+                arrival_platform="21",
+                riding_position="[16両] 前 中 後",
             ),
         ],
     )
@@ -178,8 +199,8 @@ class TestMCPIntegration:
         assert "JSON Data:" in json_content.text
         assert "transfers" in json_content.text
 
-        # Verify the scraper was called correctly
-        mcp_server.scraper.search_route.assert_called_once_with("東京駅", "大阪駅")
+        # Verify the scraper was called correctly with default search_type
+        mcp_server.scraper.search_route.assert_called_once_with("東京駅", "大阪駅", search_type='earliest')
 
     @pytest.mark.asyncio
     async def test_get_station_info_protocol(self, mcp_server, sample_stations):
