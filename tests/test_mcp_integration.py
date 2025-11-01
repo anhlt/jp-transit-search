@@ -200,7 +200,9 @@ class TestMCPIntegration:
         assert "transfers" in json_content.text
 
         # Verify the scraper was called correctly with default search_type
-        mcp_server.scraper.search_route.assert_called_once_with("東京駅", "大阪駅", search_type='earliest')
+        mcp_server.scraper.search_route.assert_called_once_with(
+            "東京駅", "大阪駅", search_type="earliest"
+        )
 
     @pytest.mark.asyncio
     async def test_get_station_info_protocol(self, mcp_server, sample_stations):

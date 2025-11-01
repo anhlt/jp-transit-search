@@ -81,8 +81,12 @@ class Route(BaseModel):
 
     from_station: str = Field(..., description="Starting station (user input)")
     to_station: str = Field(..., description="Destination station (user input)")
-    resolved_from_station: str | None = Field(None, description="Resolved starting station name from search results")
-    resolved_to_station: str | None = Field(None, description="Resolved destination station name from search results")
+    resolved_from_station: str | None = Field(
+        None, description="Resolved starting station name from search results"
+    )
+    resolved_to_station: str | None = Field(
+        None, description="Resolved destination station name from search results"
+    )
     duration: str = Field(..., description="Total duration (e.g., '49分')")
     cost: str = Field(..., description="Total cost (e.g., '628円')")
     transfer_count: int = Field(..., description="Number of transfers")

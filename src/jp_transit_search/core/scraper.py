@@ -147,7 +147,7 @@ class YahooTransitScraper:
             # Extract resolved station names from the page title
             resolved_from_station = None
             resolved_to_station = None
-            
+
             # Try to get resolved names from <h1 class="title"> element
             title_element = soup.find("h1", class_="title")
             if title_element:
@@ -200,7 +200,12 @@ class YahooTransitScraper:
             # Parse each route
             for route_section in route_sections:
                 try:
-                    route = self._parse_single_route(route_section, request, resolved_from_station, resolved_to_station)
+                    route = self._parse_single_route(
+                        route_section,
+                        request,
+                        resolved_from_station,
+                        resolved_to_station,
+                    )
                     if route:
                         routes.append(route)
                 except Exception:
@@ -273,7 +278,11 @@ class YahooTransitScraper:
         return None
 
     def _parse_single_route(
-        self, route_section: Tag, request: RouteSearchRequest, resolved_from_station: str | None = None, resolved_to_station: str | None = None
+        self,
+        route_section: Tag,
+        request: RouteSearchRequest,
+        resolved_from_station: str | None = None,
+        resolved_to_station: str | None = None,
     ) -> Route | None:
         """Parse a single route from a route section.
 

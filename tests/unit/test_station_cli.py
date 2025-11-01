@@ -48,8 +48,28 @@ class TestStationCLICommands:
         # Mock the crawler
         mock_crawler = Mock()
         mock_stations = [
-            Station(name="新宿", prefecture="東京都", name_hiragana="しんじゅく", name_katakana="シンジュク", name_romaji="shinjuku", prefecture_id="13", station_id="station_shinjuku", railway_company="JR東日本", line_name="山手線"),
-            Station(name="渋谷", prefecture="東京都", name_hiragana="しぶや", name_katakana="シブヤ", name_romaji="shibuya", prefecture_id="13", station_id="station_shibuya", railway_company="JR東日本", line_name="山手線"),
+            Station(
+                name="新宿",
+                prefecture="東京都",
+                name_hiragana="しんじゅく",
+                name_katakana="シンジュク",
+                name_romaji="shinjuku",
+                prefecture_id="13",
+                station_id="station_shinjuku",
+                railway_company="JR東日本",
+                line_name="山手線",
+            ),
+            Station(
+                name="渋谷",
+                prefecture="東京都",
+                name_hiragana="しぶや",
+                name_katakana="シブヤ",
+                name_romaji="shibuya",
+                prefecture_id="13",
+                station_id="station_shibuya",
+                railway_company="JR東日本",
+                line_name="山手線",
+            ),
         ]
         mock_crawler.crawl_all_stations.return_value = mock_stations
         mock_crawler_class.return_value = mock_crawler

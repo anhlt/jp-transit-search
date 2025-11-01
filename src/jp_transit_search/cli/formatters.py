@@ -27,7 +27,7 @@ def format_route_table(routes: Route | list[Route], verbose: bool = False) -> No
         # Use resolved station names if available, otherwise fall back to user input
         display_from = route.resolved_from_station or route.from_station
         display_to = route.resolved_to_station or route.to_station
-        
+
         # Create main route info table
         table = Table(
             title=f"Route: {display_from} → {display_to}",
@@ -121,7 +121,7 @@ def format_route_detailed(routes: Route | list[Route]) -> None:
         # Use resolved station names if available, otherwise fall back to user input
         display_from = route.resolved_from_station or route.from_station
         display_to = route.resolved_to_station or route.to_station
-        
+
         # Route summary panel
         summary_text = f"""[bold]From:[/bold] {display_from}
 [bold]To:[/bold] {display_to}
@@ -193,7 +193,7 @@ def format_route_json(routes: Route | list[Route]) -> str:
         # Use resolved station names if available, otherwise fall back to user input
         display_from = route.resolved_from_station or route.from_station
         display_to = route.resolved_to_station or route.to_station
-        
+
         route_dict = {
             "from_station": display_from,
             "to_station": display_to,

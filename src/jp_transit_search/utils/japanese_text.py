@@ -109,39 +109,39 @@ def generate_text_variants(text: str) -> dict[str, str]:
 
 def is_likely_romaji(text: str) -> bool:
     """Check if text is likely romaji (Latin characters).
-    
+
     Args:
         text: Input text to check
-        
+
     Returns:
         True if text appears to be romaji, False otherwise
     """
     if not text:
         return False
-    
+
     # Remove spaces, punctuation, and numbers for analysis
-    clean_text = re.sub(r'[\s\d\-\.,;:!?()[\]{}"\'/\\]+', '', text)
-    
+    clean_text = re.sub(r'[\s\d\-\.,;:!?()[\]{}"\'/\\]+', "", text)
+
     if not clean_text:
         return False
-    
+
     # Count Latin characters (a-z, A-Z)
-    latin_chars = len(re.findall(r'[a-zA-Z]', clean_text))
-    
+    latin_chars = len(re.findall(r"[a-zA-Z]", clean_text))
+
     # Count Japanese characters (hiragana, katakana, kanji)
-    hiragana_chars = len(re.findall(r'[\u3040-\u309f]', clean_text))
-    katakana_chars = len(re.findall(r'[\u30a0-\u30ff]', clean_text))
-    kanji_chars = len(re.findall(r'[\u4e00-\u9faf]', clean_text))
-    
+    hiragana_chars = len(re.findall(r"[\u3040-\u309f]", clean_text))
+    katakana_chars = len(re.findall(r"[\u30a0-\u30ff]", clean_text))
+    kanji_chars = len(re.findall(r"[\u4e00-\u9faf]", clean_text))
+
     japanese_chars = hiragana_chars + katakana_chars + kanji_chars
     total_chars = len(clean_text)
-    
+
     # If more than 70% of characters are Latin, likely romaji
     if total_chars > 0 and latin_chars / total_chars > 0.7:
         return True
-    
+
     # If there are Latin characters but no Japanese characters, likely romaji
     if latin_chars > 0 and japanese_chars == 0:
         return True
-    
+
     return False
